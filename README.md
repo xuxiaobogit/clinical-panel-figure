@@ -1,4 +1,4 @@
-# Figure Builder
+# Clinical Panel Figure Builder
 
 A single-file, offline, browser-based tool for assembling **multi-panel figures for journal
 submission** — especially clinical/medical composites where several sub-images (ultrasound, CT,
@@ -80,7 +80,7 @@ It's a single HTML file, which makes distribution easy:
 
 - **GitHub + GitHub Pages (recommended).** Push the repo, then enable *Settings → Pages → Deploy from
   branch → `main` / root*. `index.html` redirects to the app, so people just open
-  `https://<user>.github.io/<repo>/`. Works offline once loaded; no backend needed.
+  `https://<user>.github.io/clinical-panel-figure/`. Works offline once loaded; no backend needed.
 - **WeChat 公众号.** A 公众号 article can't run HTML directly, so don't paste the code into the editor.
   Instead, host it on GitHub Pages (above) and put the **link** in the article (e.g. as a 阅读原文 link or a
   QR code to the Pages URL). Readers open it in their browser. Tip: also attach the `.html` file itself so
