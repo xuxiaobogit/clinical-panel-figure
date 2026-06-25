@@ -1,3 +1,6 @@
+# Claude Code / local dev config (not needed by users)
+.claude/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
