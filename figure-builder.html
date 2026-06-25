@@ -1,0 +1,661 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Figure Builder — multi-panel figures for journal submission</title>
+<style>
+  :root{ --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2b303b; --txt:#e7e9ee; --mut:#9aa0ac; --acc:#5b8cff; --warn:#ffcc00; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--txt); font:13px/1.45 system-ui,Segoe UI,Arial,sans-serif; }
+  button,select,input{ font:inherit; color:var(--txt); }
+  button{ background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 10px; cursor:pointer; }
+  button:hover{ border-color:#3a4150; }
+  button.pri{ background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.sm{ padding:4px 7px; border-radius:6px; }
+  select,input[type=number],input[type=text]{ background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:5px 7px; }
+  input[type=number]{ width:64px; }
+  input[type=range]{ width:100%; }
+  .app{ display:grid; grid-template-columns:188px 1fr 256px; grid-template-rows:auto 1fr; height:100%; }
+  header{ grid-column:1/4; display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header .grp{ display:flex; gap:6px; align-items:center; }
+  header .sep{ width:1px; height:22px; background:var(--line); }
+  h1{ font-size:14px; margin:0 8px 0 0; font-weight:600; }
+  aside{ background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:10px; }
+  aside.right{ border-right:0; border-left:1px solid var(--line); }
+  main{ position:relative; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:18px; }
+  #stage{ background:#000; box-shadow:0 0 0 1px var(--line); }
+  .tray{ display:flex; flex-direction:column; gap:8px; }
+  .thumb{ border:1px solid var(--line); border-radius:7px; overflow:hidden; cursor:grab; background:#000; position:relative; }
+  .thumb img{ width:100%; display:block; max-height:96px; object-fit:contain; background:#000; }
+  .thumb .nm{ font-size:11px; color:var(--mut); padding:3px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .thumb.sel{ border-color:var(--acc); }
+  .thumb .dim{ position:absolute; top:3px; right:4px; font-size:10px; background:rgba(0,0,0,.6); padding:1px 4px; border-radius:4px; color:var(--mut); }
+  .lbl{ font-size:11px; color:var(--mut); display:block; margin:10px 0 3px; text-transform:uppercase; letter-spacing:.04em; }
+  .row{ display:flex; gap:6px; align-items:center; margin:5px 0; flex-wrap:wrap; }
+  .swatch{ width:22px; height:22px; border-radius:5px; border:2px solid transparent; cursor:pointer; }
+  .swatch.sel{ border-color:#fff; }
+  .hint{ color:var(--mut); font-size:11px; }
+  .pill{ display:inline-block; background:var(--panel2); border:1px solid var(--line); border-radius:20px; padding:2px 9px; font-size:11px; }
+  .pill.warn{ color:var(--warn); border-color:#6b5a00; }
+  .pill.ok{ color:#19d36b; border-color:#1d5436; }
+  .muted{ color:var(--mut); }
+  #drop{ position:fixed; inset:0; background:rgba(91,140,255,.12); border:3px dashed var(--acc); display:none; align-items:center; justify-content:center; font-size:20px; z-index:50; pointer-events:none; }
+  .card{ border:1px solid var(--line); border-radius:9px; padding:9px; margin-bottom:10px; background:var(--panel2); }
+  .k{ color:var(--mut); }
+  .colbtn{ width:30px; height:24px; padding:0; border:1px solid var(--line); border-radius:5px; }
+  a.dl{ display:none; }
+  .cell-drop{ outline:3px solid var(--acc) !important; }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Figure Builder</h1>
+    <div class="grp"><button class="pri" id="load">Load images…</button><input type="file" id="file" accept="image/*" multiple hidden></div>
+    <div class="sep"></div>
+    <div class="grp"><span class="k">Layout</span>
+      <select id="preset">
+        <option value="level">By level A–I (2·1·2·2·2)</option>
+        <option value="g33">Grid 3 × 3</option>
+        <option value="g24">Grid 2 × 4</option>
+        <option value="g23">Grid 2 × 3</option>
+        <option value="g22">Grid 2 × 2</option>
+        <option value="r2">Row of 2</option>
+        <option value="r3">Row of 3</option>
+        <option value="custom">Custom R × C…</option>
+      </select>
+    </div>
+    <div class="grp"><span class="k">Gutter</span><input type="range" id="gutter" min="0" max="40" value="10" style="width:80px"></div>
+    <div class="grp"><span class="k">BG</span><input type="color" id="bg" value="#000000" class="colbtn" style="width:34px;height:26px"></div>
+    <div class="sep"></div>
+    <div class="grp"><span class="k">Out</span>
+      <input type="number" id="wmm" value="174" min="20" max="500" step="1"> mm
+      <span class="dpipre"><button class="sm" data-mm="85" title="single column">85</button><button class="sm" data-mm="114" title="1.5 column">114</button><button class="sm" data-mm="174" title="double column">174</button></span>
+      <span class="k">×</span>
+      <input type="number" id="dpi" value="600" min="72" max="2400" step="50"> dpi
+      <span class="dpipre"><button class="sm" data-dpi="300">300</button><button class="sm" data-dpi="600">600</button><button class="sm" data-dpi="1200">1200</button></span>
+    </div>
+    <div class="grp">
+      <button class="pri" id="expFull">Export complete</button>
+      <button id="expQuiz">Export page-1 subset</button>
+    </div>
+    <div class="grp"><span class="pill" id="outInfo" title="">—</span></div>
+    <div class="sep"></div>
+    <div class="grp"><button id="save">Save project</button><button id="loadp">Open project</button><input type="file" id="pfile" accept=".json" hidden></div>
+  </header>
+
+  <aside class="left">
+    <span class="lbl">Images</span>
+    <div class="hint" id="trayhint">Drag image files anywhere, or “Load images”. Then drag a thumbnail onto a panel — or select a panel and click a thumbnail.</div>
+    <div class="tray" id="tray"></div>
+  </aside>
+
+  <main id="main"><canvas id="stage"></canvas></main>
+
+  <aside class="right">
+    <div class="card">
+      <span class="lbl" style="margin-top:0">Labels</span>
+      <div class="row"><label><input type="checkbox" id="lblShow" checked> show</label>
+        <label><input type="checkbox" id="lblUpper" checked> A/a</label>
+        <label><input type="checkbox" id="lblChip"> chip</label></div>
+      <div class="row"><span class="k">size</span><input type="range" id="lblSize" min="12" max="60" value="34">
+        <input type="color" id="lblColor" value="#ffffff" class="colbtn" style="width:30px;height:24px"></div>
+    </div>
+
+    <div class="card">
+      <span class="lbl" style="margin-top:0">Panel frames</span>
+      <div class="row"><label><input type="checkbox" id="frShow"> show borders (all panels)</label></div>
+      <div class="row"><span class="k" style="width:40px">color</span><input type="color" id="frColor" value="#ffffff" class="colbtn">
+        <span class="k">width</span><input type="range" id="frWidth" min="0" max="14" value="3" style="width:78px"></div>
+      <div class="row"><span class="k" style="width:40px">corner</span><input type="range" id="frRadius" min="0" max="40" value="0"></div>
+      <div class="hint">Width &amp; corner are in figure units (scale with export). Per-panel overrides live in the selected-panel card.</div>
+    </div>
+
+    <div class="card" id="cellCard">
+      <span class="lbl" style="margin-top:0">Selected panel <span class="pill" id="cellTag">—</span></span>
+      <div class="hint" id="cellHint">Click a panel in the canvas to select it.</div>
+      <div id="cellBody" style="display:none">
+        <div class="row"><b id="cellImg" class="muted">empty</b></div>
+        <div class="row">
+          <button class="sm" id="rotL">⟲ 90°</button>
+          <button class="sm" id="rotR">⟳ 90°</button>
+          <button class="sm" id="clearImg">clear</button>
+          <button class="sm" id="resetT">reset crop</button>
+        </div>
+        <div class="row"><span class="k" style="width:34px">zoom</span><input type="range" id="zoom" min="100" max="500" value="100"></div>
+        <div class="hint">Drag inside the panel to pan · wheel to zoom.</div>
+        <div class="row"><span class="k" style="width:40px">border</span>
+          <select id="cellBd"><option value="inherit">default</option><option value="on">on</option><option value="off">off</option></select>
+          <input type="color" id="cellBdColor" value="#ffffff" class="colbtn" title="override this panel's border color">
+          <button class="sm" id="cellBdColorClear" title="use global frame color">use global</button>
+        </div>
+        <div class="row"><label><input type="checkbox" id="page2"> page-2 only (hidden in page-1 subset)</label></div>
+        <div class="row"><span class="k">label</span><input type="text" id="lblText" placeholder="(auto letter)" style="width:150px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="arrowCard" style="display:none">
+      <span class="lbl" style="margin-top:0">Arrows</span>
+      <div class="row">
+        <button class="sm" id="addArrow">+ arrow</button>
+        <button class="sm" id="delArrow">delete</button>
+      </div>
+      <div class="row" id="arrowColors">
+        <span class="swatch sel" data-c="#ff3b30" style="background:#ff3b30"></span>
+        <span class="swatch" data-c="#ffcc00" style="background:#ffcc00"></span>
+        <span class="swatch" data-c="#ffffff" style="background:#fff"></span>
+        <span class="swatch" data-c="#19d36b" style="background:#19d36b"></span>
+        <input type="color" id="arrowCustom" value="#ff3b30" class="colbtn" style="width:28px;height:22px">
+      </div>
+      <div class="row"><span class="k" style="width:34px">width</span><input type="range" id="arrowW" min="2" max="16" value="6"></div>
+      <div class="hint">Click an arrow’s endpoint to drag it. Color buttons recolor the selected arrow.</div>
+    </div>
+
+    <div class="hint">Arrow convention example — Red = pus/debris · Yellow = stone · White = distractor (edit freely).</div>
+  </aside>
+</div>
+
+<div id="drop">Drop images to load</div>
+<a class="dl" id="dl"></a>
+
+<script>
+"use strict";
+const LOGICAL_W = 1000, UNIT = 300, MARGIN = 18;
+const PRESETS = {
+  level:{ rows:[ {rh:1,cells:[1,1]}, {rh:.8,cells:[1]}, {rh:1,cells:[1,1]}, {rh:1,cells:[1,1]}, {rh:1,cells:[1,1]} ] },
+  g33:{ rows:Array.from({length:3},()=>({rh:1,cells:[1,1,1]})) },
+  g24:{ rows:Array.from({length:4},()=>({rh:1,cells:[1,1]})) },
+  g23:{ rows:Array.from({length:2},()=>({rh:1,cells:[1,1,1]})) },
+  g22:{ rows:Array.from({length:2},()=>({rh:1,cells:[1,1]})) },
+  r2:{ rows:[{rh:1,cells:[1,1]}] },
+  r3:{ rows:[{rh:1,cells:[1,1,1]}] },
+};
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+let images = [];           // {id,name,img,w,h}
+let imgSeq = 0;
+let cells = [];            // persistent per-panel data
+let layoutName = "level";
+let gutter = 10, bgColor = "#000000";
+let selCell = -1, selArrow = -1;
+let arrowColor = "#ff3b30";
+let labelOpts = { show:true, upper:true, chip:false, size:34, color:"#ffffff" };
+let frameOpts = { show:false, color:"#ffffff", width:3, radius:0 };
+let selImageId = null;
+
+const stage = document.getElementById("stage"), ctx = stage.getContext("2d");
+let geom = null, displayScale = 1;
+let customDef = { rows:[{rh:1,cells:[1,1]},{rh:1,cells:[1,1]}] };
+
+/* ---------- layout geometry ---------- */
+function buildLayout(){
+  const def = layoutName==="custom" ? customDef : PRESETS[layoutName];
+  const rects = []; let y = MARGIN;
+  for(const row of def.rows){
+    const h = row.rh*UNIT;
+    const n = row.cells.length, sum = row.cells.reduce((a,b)=>a+b,0);
+    const avail = LOGICAL_W - 2*MARGIN - (n-1)*gutter;
+    let x = MARGIN;
+    for(let c=0;c<n;c++){
+      const w = avail*row.cells[c]/sum;
+      rects.push({ x, y, w, h });
+      x += w + gutter;
+    }
+    y += h + gutter;
+  }
+  const H = y - gutter + MARGIN;
+  // preserve existing cell data by index
+  const next = rects.map((r,i)=>{
+    const prev = cells[i] || {};
+    return { x:r.x, y:r.y, w:r.w, h:r.h,
+      imgId: prev.imgId ?? null, zoom: prev.zoom ?? 1, ox: prev.ox ?? 0, oy: prev.oy ?? 0,
+      rot: prev.rot ?? 0, page2: prev.page2 ?? false, labelText: prev.labelText ?? "",
+      bd: prev.bd ?? "inherit", bdColor: prev.bdColor ?? null,
+      arrows: prev.arrows ?? [] };
+  });
+  cells = next;
+  geom = { W:LOGICAL_W, H, rects };
+  if(selCell>=cells.length) selCell=-1;
+}
+
+// subset: remove rows where all cells flagged page2, reflow upward, re-letter
+function subsetGeom(){
+  const def = layoutName==="custom" ? customDef : PRESETS[layoutName];
+  let idx=0; const rowsCells=[];
+  for(const row of def.rows){ const arr=[]; for(let c=0;c<row.cells.length;c++){ arr.push(idx++); } rowsCells.push({row,arr}); }
+  const keepRows = rowsCells.filter(rc=>rc.arr.some(i=>!cells[i].page2));
+  const list=[]; let y=MARGIN; let lc=0;
+  for(const rc of keepRows){
+    const h=rc.row.rh*UNIT, n=rc.row.cells.length, sum=rc.row.cells.reduce((a,b)=>a+b,0);
+    const avail=LOGICAL_W-2*MARGIN-(n-1)*gutter; let x=MARGIN;
+    for(let c=0;c<n;c++){
+      const w=avail*rc.row.cells[c]/sum;
+      const ci=rc.arr[c]; const orig=cells[ci];
+      const cell={...orig,x,y,w,h};
+      if(!orig.page2){ list.push({cell,letter:LETTERS[lc++]}); }
+      else { list.push({cell:{...cell,imgId:null,arrows:[],labelText:" ",bd:"off"},letter:""}); }
+      x+=w+gutter;
+    }
+    y+=h+gutter;
+  }
+  return { geom:{W:LOGICAL_W,H:y-gutter+MARGIN}, list };
+}
+
+/* ---------- helpers ---------- */
+function imgById(id){ return images.find(i=>i.id===id); }
+function effDims(im, rot){ return (rot%180===0)?[im.w,im.h]:[im.h,im.w]; }
+function coverScaleFor(cell, im, rot){
+  const [ew,eh] = effDims(im,rot);
+  return Math.max(cell.w/ew, cell.h/eh);
+}
+function effBorder(cell){
+  const show = cell.bd==="on" ? true : cell.bd==="off" ? false : frameOpts.show;
+  return { show, color: cell.bdColor || frameOpts.color, width: frameOpts.width, radius: frameOpts.radius };
+}
+function roundRectPath(g, x, y, w, h, r){
+  r = Math.max(0, Math.min(r, w/2, h/2));
+  g.beginPath();
+  if(r<=0){ g.rect(x,y,w,h); return; }
+  g.moveTo(x+r,y);
+  g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r);
+  g.arcTo(x,y,x+w,y,r);
+  g.closePath();
+}
+
+/* ---------- single source-of-truth renderer ---------- */
+function drawImageInto(g, cell, c, radius, screen){
+  g.save();
+  roundRectPath(g, cell.x*c, cell.y*c, cell.w*c, cell.h*c, radius*c);
+  g.clip();
+  const im=imgById(cell.imgId);
+  if(im){
+    const base=coverScaleFor(cell,im,cell.rot), s=base*cell.zoom, [ew,eh]=effDims(im,cell.rot);
+    const drawW=ew*s, drawH=eh*s;
+    const maxOX=Math.max(0,(drawW-cell.w)/2), maxOY=Math.max(0,(drawH-cell.h)/2);
+    cell.ox=Math.max(-maxOX,Math.min(maxOX,cell.ox));
+    cell.oy=Math.max(-maxOY,Math.min(maxOY,cell.oy));
+    g.translate((cell.x+cell.w/2+cell.ox)*c,(cell.y+cell.h/2+cell.oy)*c);
+    g.rotate(cell.rot*Math.PI/180);
+    g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
+    g.drawImage(im.img,-im.w*s*c/2,-im.h*s*c/2,im.w*s*c,im.h*s*c);
+  } else if(screen){
+    g.fillStyle="#101319"; g.fillRect(cell.x*c,cell.y*c,cell.w*c,cell.h*c);
+  }
+  g.restore();
+}
+function drawBorderInto(g, cell, c){
+  const b=effBorder(cell);
+  if(!b.show || b.width<=0) return;
+  const lw=b.width*c, inset=lw/2;
+  g.save();
+  g.strokeStyle=b.color; g.lineWidth=lw; g.lineJoin="miter";
+  roundRectPath(g, cell.x*c+inset, cell.y*c+inset, cell.w*c-lw, cell.h*c-lw, Math.max(0,(b.radius-b.width/2))*c);
+  g.stroke();
+  g.restore();
+}
+function drawArrowInto(g, cell, a, c, hot){
+  const x1=(cell.x+a.x1*cell.w)*c, y1=(cell.y+a.y1*cell.h)*c;
+  const x2=(cell.x+a.x2*cell.w)*c, y2=(cell.y+a.y2*cell.h)*c;
+  const lw=a.width*c, ang=Math.atan2(y2-y1,x2-x1), head=lw*3.2;
+  g.save();
+  g.strokeStyle=a.color; g.fillStyle=a.color; g.lineCap="round"; g.lineJoin="round"; g.lineWidth=lw;
+  g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2-Math.cos(ang)*head, y2-Math.sin(ang)*head); g.stroke();
+  g.beginPath(); g.moveTo(x2,y2);
+  g.lineTo(x2-Math.cos(ang-0.42)*head, y2-Math.sin(ang-0.42)*head);
+  g.lineTo(x2-Math.cos(ang+0.42)*head, y2-Math.sin(ang+0.42)*head);
+  g.closePath(); g.fill();
+  if(hot){
+    for(const [hx,hy] of [[x1,y1],[x2,y2]]){
+      g.beginPath(); g.arc(hx,hy,Math.max(5,lw*0.9),0,7);
+      g.fillStyle="#fff"; g.fill(); g.lineWidth=2; g.strokeStyle="#5b8cff"; g.stroke();
+    }
+  }
+  g.restore();
+}
+function drawLabelInto(g, cell, letter, c){
+  if(!labelOpts.show) return;
+  const t = cell.labelText || (labelOpts.upper?letter:String(letter||"").toLowerCase());
+  if(!t || !String(t).trim()) return;
+  const fs=labelOpts.size*c;
+  g.save();
+  g.font=`600 ${fs}px system-ui,Arial`; g.textBaseline="top";
+  const px=cell.x*c+fs*0.32, py=cell.y*c+fs*0.26;
+  if(labelOpts.chip){ const w=g.measureText(t).width; g.fillStyle="rgba(0,0,0,.55)"; g.fillRect(px-fs*0.18,py-fs*0.10,w+fs*0.36,fs*1.12); }
+  g.fillStyle=labelOpts.color; g.fillText(t,px,py);
+  g.restore();
+}
+// the ONE renderer used by both screen preview and export
+function paint(g, c, opts){
+  opts = opts || {};
+  const include = opts.includePage2!==false;
+  let drawCells, W, H;
+  if(include){ drawCells = cells.map((cell,i)=>({cell,letter:LETTERS[i]})); W=geom.W; H=geom.H; }
+  else { const s=subsetGeom(); drawCells=s.list; W=s.geom.W; H=s.geom.H; }
+  g.fillStyle=bgColor; g.fillRect(0,0,W*c,H*c);
+  for(const {cell,letter} of drawCells){
+    drawImageInto(g, cell, c, effBorder(cell).radius, opts.screen);
+    drawBorderInto(g, cell, c);
+    for(let ai=0;ai<cell.arrows.length;ai++){
+      const hot = !!(opts.screen && include && cells[selCell]===cell && ai===selArrow);
+      drawArrowInto(g, cell, cell.arrows[ai], c, hot);
+    }
+    drawLabelInto(g, cell, letter, c);
+  }
+  if(opts.screen && include && selCell>=0 && cells[selCell]){
+    const s=cells[selCell];
+    g.strokeStyle="#5b8cff"; g.lineWidth=2; g.strokeRect(s.x*c+1,s.y*c+1,s.w*c-2,s.h*c-2);
+  }
+}
+
+function drawScreen(){
+  const c=displayScale;
+  stage.width=Math.round(geom.W*c); stage.height=Math.round(geom.H*c);
+  paint(ctx, c, {screen:true, includePage2:true});
+}
+function resizeStage(){
+  const main=document.getElementById("main");
+  const availW=main.clientWidth-36, availH=main.clientHeight-36;
+  displayScale=Math.min(availW/geom.W, availH/geom.H, 1.2);
+}
+function render(){
+  buildLayout();
+  resizeStage();
+  drawScreen();
+  updateReadout();
+  saveLocal();
+}
+
+/* ---------- DPI / output transparency ---------- */
+function outputInfo(){
+  const wmm=Math.max(1,+$("wmm").value||174), dpi=Math.max(1,+$("dpi").value||600);
+  const pxW=Math.round(wmm/25.4*dpi);
+  const cOut=pxW/LOGICAL_W;
+  const fullH=geom?geom.H:0;
+  const pxH=Math.round(fullH*cOut);
+  const physH=fullH/LOGICAL_W*wmm;        // mm
+  let minEff=Infinity, anyImg=false;
+  for(const cell of cells){
+    const im=imgById(cell.imgId); if(!im) continue; anyImg=true;
+    const s=coverScaleFor(cell,im,cell.rot)*cell.zoom;
+    const eff=dpi/(s*cOut);               // effective DPI at which this source image is reproduced
+    if(eff<minEff) minEff=eff;
+  }
+  return { wmm, dpi, pxW, pxH, physW:wmm, physH, minEff:anyImg?minEff:null };
+}
+function updateReadout(){
+  if(!geom) return;
+  const i=outputInfo(), el=$("outInfo");
+  let txt=`${i.pxW.toLocaleString()} × ${i.pxH.toLocaleString()} px · ${i.wmm} × ${Math.round(i.physH)} mm`;
+  el.classList.remove("warn","ok");
+  if(i.minEff!=null){
+    txt+=` · src ≈ ${Math.round(i.minEff)} dpi`;
+    if(i.minEff < i.dpi*0.9){ el.classList.add("warn");
+      el.title=`Lowest-resolution placed image renders at ~${Math.round(i.minEff)} dpi — below the ${i.dpi} dpi target. The figure file is genuinely ${i.dpi} dpi, but that image is being upscaled, so its detail will look soft. Use a higher-resolution source or a smaller panel.`;
+    } else { el.classList.add("ok");
+      el.title=`All placed images meet or exceed the ${i.dpi} dpi target. Figure is ${i.pxW}×${i.pxH} px = ${i.wmm}×${Math.round(i.physH)} mm at ${i.dpi} dpi.`;
+    }
+  } else {
+    el.title=`Figure will export at ${i.pxW}×${i.pxH} px = ${i.wmm}×${Math.round(i.physH)} mm, with ${i.dpi} dpi embedded in the PNG.`;
+  }
+  el.textContent=txt;
+}
+
+/* ---------- hit testing & interaction ---------- */
+function canvasToLogical(ev){
+  const r=stage.getBoundingClientRect();
+  return { x:(ev.clientX-r.left)/displayScale, y:(ev.clientY-r.top)/displayScale };
+}
+function cellAt(p){
+  for(let i=0;i<cells.length;i++){ const c=cells[i]; if(p.x>=c.x&&p.x<=c.x+c.w&&p.y>=c.y&&p.y<=c.y+c.h) return i; }
+  return -1;
+}
+function arrowHandleAt(p){
+  if(selCell<0) return null;
+  const cell=cells[selCell];
+  for(let ai=0;ai<cell.arrows.length;ai++){
+    const a=cell.arrows[ai];
+    for(const end of ["1","2"]){
+      const hx=cell.x+a["x"+end]*cell.w, hy=cell.y+a["y"+end]*cell.h;
+      if(Math.hypot(p.x-hx,p.y-hy) < 14/displayScale) return {ai,end};
+    }
+  }
+  return null;
+}
+
+let drag=null;
+stage.addEventListener("mousedown",ev=>{
+  const p=canvasToLogical(ev);
+  const h=arrowHandleAt(p);
+  if(h){ selArrow=h.ai; drag={type:"arrow",end:h.end}; sync(); return; }
+  const ci=cellAt(p);
+  if(ci!==selCell){ selCell=ci; selArrow=-1; sync(); }
+  if(ci>=0){ drag={type:"pan",lx:p.x,ly:p.y,ox:cells[ci].ox,oy:cells[ci].oy}; }
+  drawScreen();
+});
+window.addEventListener("mousemove",ev=>{
+  if(!drag) return;
+  const p=canvasToLogical(ev);
+  if(drag.type==="pan" && selCell>=0){
+    const cell=cells[selCell];
+    cell.ox=drag.ox+(p.x-drag.lx); cell.oy=drag.oy+(p.y-drag.ly);
+    drawScreen();
+  } else if(drag.type==="arrow" && selCell>=0){
+    const cell=cells[selCell], a=cell.arrows[selArrow];
+    a["x"+drag.end]=Math.max(0,Math.min(1,(p.x-cell.x)/cell.w));
+    a["y"+drag.end]=Math.max(0,Math.min(1,(p.y-cell.y)/cell.h));
+    drawScreen();
+  }
+});
+window.addEventListener("mouseup",()=>{ if(drag){ drag=null; saveLocal(); } });
+stage.addEventListener("wheel",ev=>{
+  const p=canvasToLogical(ev); const ci=cellAt(p);
+  if(ci<0) return; ev.preventDefault();
+  if(ci!==selCell){ selCell=ci; sync(); }
+  const cell=cells[ci];
+  cell.zoom=Math.max(1,Math.min(5,cell.zoom*(ev.deltaY<0?1.08:0.926)));
+  document.getElementById("zoom").value=Math.round(cell.zoom*100);
+  drawScreen(); updateReadout(); saveLocal();
+},{passive:false});
+
+// drag a thumbnail directly onto a panel
+stage.addEventListener("dragover",ev=>{ if(dragImageId!=null){ ev.preventDefault(); stage.classList.add("cell-drop"); } });
+stage.addEventListener("dragleave",()=>stage.classList.remove("cell-drop"));
+stage.addEventListener("drop",ev=>{
+  if(dragImageId==null) return;
+  ev.preventDefault(); ev.stopPropagation(); stage.classList.remove("cell-drop");
+  const ci=cellAt(canvasToLogical(ev));
+  if(ci>=0){ placeImage(ci,dragImageId); selCell=ci; selArrow=-1; sync(); drawScreen(); updateReadout(); saveLocal(); }
+  dragImageId=null;
+});
+
+/* ---------- images ---------- */
+function placeImage(ci,imgId){ const c=cells[ci]; c.imgId=imgId; c.ox=0; c.oy=0; c.zoom=1; c.rot=0; }
+function addFiles(files){
+  [...files].filter(f=>f.type.startsWith("image/")).forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{ const im=new Image(); im.onload=()=>{
+      images.push({id:++imgSeq,name:f.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
+      buildTray(); saveLocal();
+    }; im.src=rd.result; };
+    rd.readAsDataURL(f);
+  });
+}
+let dragImageId=null;
+function buildTray(){
+  const tray=document.getElementById("tray"); tray.innerHTML="";
+  document.getElementById("trayhint").style.display=images.length?"none":"block";
+  images.forEach(im=>{
+    const d=document.createElement("div"); d.className="thumb"+(selImageId===im.id?" sel":""); d.draggable=true;
+    d.innerHTML=`<img src="${im.img.src}"><div class="dim">${im.w}×${im.h}</div><div class="nm">${im.name}</div>`;
+    d.onclick=()=>{
+      if(selCell>=0){ placeImage(selCell,im.id); sync(); drawScreen(); updateReadout(); saveLocal(); }
+      else { selImageId=im.id; buildTray(); }
+    };
+    d.addEventListener("dragstart",()=>{ dragImageId=im.id; });
+    d.addEventListener("dragend",()=>{ dragImageId=null; stage.classList.remove("cell-drop"); });
+    tray.appendChild(d);
+  });
+}
+
+/* ---------- right panel sync ---------- */
+function sync(){
+  const has=selCell>=0;
+  document.getElementById("cellHint").style.display=has?"none":"block";
+  document.getElementById("cellBody").style.display=has?"block":"none";
+  document.getElementById("arrowCard").style.display=has?"block":"none";
+  document.getElementById("cellTag").textContent=has?LETTERS[selCell]:"—";
+  if(has){
+    const cell=cells[selCell];
+    const im=imgById(cell.imgId);
+    document.getElementById("cellImg").textContent=im?`${im.name} (${im.w}×${im.h})`:"empty — click a thumbnail to place";
+    document.getElementById("zoom").value=Math.round(cell.zoom*100);
+    document.getElementById("page2").checked=!!cell.page2;
+    document.getElementById("lblText").value=cell.labelText||"";
+    document.getElementById("cellBd").value=cell.bd||"inherit";
+    document.getElementById("cellBdColor").value=cell.bdColor||frameOpts.color;
+  }
+}
+
+/* ---------- controls ---------- */
+const $=id=>document.getElementById(id);
+$("load").onclick=()=>$("file").click();
+$("file").onchange=e=>addFiles(e.target.files);
+$("preset").onchange=e=>{ layoutName=e.target.value; if(layoutName==="custom"){
+  const r=parseInt(prompt("Rows:","3")||"3"), col=parseInt(prompt("Columns:","3")||"3");
+  customDef={rows:Array.from({length:Math.max(1,r)},()=>({rh:1,cells:Array.from({length:Math.max(1,col)},()=>1)}))};
+} selCell=-1; render(); sync(); };
+$("gutter").oninput=e=>{ gutter=+e.target.value; render(); };
+$("bg").oninput=e=>{ bgColor=e.target.value; drawScreen(); saveLocal(); };
+$("lblShow").onchange=e=>{ labelOpts.show=e.target.checked; drawScreen(); saveLocal(); };
+$("lblUpper").onchange=e=>{ labelOpts.upper=e.target.checked; drawScreen(); saveLocal(); };
+$("lblChip").onchange=e=>{ labelOpts.chip=e.target.checked; drawScreen(); saveLocal(); };
+$("lblSize").oninput=e=>{ labelOpts.size=+e.target.value; drawScreen(); saveLocal(); };
+$("lblColor").oninput=e=>{ labelOpts.color=e.target.value; drawScreen(); saveLocal(); };
+$("frShow").onchange=e=>{ frameOpts.show=e.target.checked; drawScreen(); saveLocal(); };
+$("frColor").oninput=e=>{ frameOpts.color=e.target.value; drawScreen(); saveLocal(); };
+$("frWidth").oninput=e=>{ frameOpts.width=+e.target.value; drawScreen(); saveLocal(); };
+$("frRadius").oninput=e=>{ frameOpts.radius=+e.target.value; drawScreen(); saveLocal(); };
+$("zoom").oninput=e=>{ if(selCell<0)return; cells[selCell].zoom=(+e.target.value)/100; drawScreen(); updateReadout(); saveLocal(); };
+$("rotL").onclick=()=>{ if(selCell<0)return; cells[selCell].rot=(cells[selCell].rot+270)%360; cells[selCell].ox=0;cells[selCell].oy=0; drawScreen(); saveLocal(); };
+$("rotR").onclick=()=>{ if(selCell<0)return; cells[selCell].rot=(cells[selCell].rot+90)%360; cells[selCell].ox=0;cells[selCell].oy=0; drawScreen(); saveLocal(); };
+$("clearImg").onclick=()=>{ if(selCell<0)return; cells[selCell].imgId=null; sync(); drawScreen(); updateReadout(); saveLocal(); };
+$("resetT").onclick=()=>{ if(selCell<0)return; Object.assign(cells[selCell],{zoom:1,ox:0,oy:0,rot:0}); $("zoom").value=100; drawScreen(); updateReadout(); saveLocal(); };
+$("page2").onchange=e=>{ if(selCell<0)return; cells[selCell].page2=e.target.checked; drawScreen(); saveLocal(); };
+$("lblText").oninput=e=>{ if(selCell<0)return; cells[selCell].labelText=e.target.value; drawScreen(); saveLocal(); };
+$("cellBd").onchange=e=>{ if(selCell<0)return; cells[selCell].bd=e.target.value; drawScreen(); saveLocal(); };
+$("cellBdColor").oninput=e=>{ if(selCell<0)return; cells[selCell].bdColor=e.target.value; drawScreen(); saveLocal(); };
+$("cellBdColorClear").onclick=()=>{ if(selCell<0)return; cells[selCell].bdColor=null; $("cellBdColor").value=frameOpts.color; drawScreen(); saveLocal(); };
+$("addArrow").onclick=()=>{ if(selCell<0)return; cells[selCell].arrows.push({x1:.7,y1:.7,x2:.45,y2:.45,color:arrowColor,width:6}); selArrow=cells[selCell].arrows.length-1; drawScreen(); saveLocal(); };
+$("delArrow").onclick=()=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; drawScreen(); saveLocal(); };
+$("arrowW").oninput=e=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows[selArrow].width=+e.target.value; drawScreen(); saveLocal(); };
+document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
+  document.querySelectorAll("#arrowColors .swatch").forEach(x=>x.classList.remove("sel")); s.classList.add("sel");
+  arrowColor=s.dataset.c; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); }
+});
+$("arrowCustom").oninput=e=>{ arrowColor=e.target.value; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); } };
+function onOutChange(){ updateReadout(); saveLocal(); }
+$("wmm").oninput=onOutChange;
+$("dpi").oninput=onOutChange;
+document.querySelectorAll("[data-dpi]").forEach(b=>b.onclick=()=>{ $("dpi").value=b.dataset.dpi; onOutChange(); });
+document.querySelectorAll("[data-mm]").forEach(b=>b.onclick=()=>{ $("wmm").value=b.dataset.mm; onOutChange(); });
+
+/* ---------- export (PNG with correct DPI via pHYs) ---------- */
+function renderOffscreen(includePage2){
+  const {pxW}=outputInfo();
+  const c=pxW/LOGICAL_W;
+  let H=geom.H; if(!includePage2) H=subsetGeom().geom.H;
+  const off=document.createElement("canvas");
+  off.width=pxW; off.height=Math.round(H*c);
+  paint(off.getContext("2d"), c, {includePage2, screen:false});
+  return off;
+}
+function exportPNG(includePage2){
+  const dpi=Math.max(1,+$("dpi").value||600);
+  const off=renderOffscreen(includePage2);
+  const tag=includePage2?"complete":"page1";
+  const fname=`Figure-${tag}-${dpi}dpi.png`;
+  off.toBlob(blob=>{
+    blob.arrayBuffer().then(buf=>{
+      const out=withPhys(new Uint8Array(buf),dpi);
+      const url=URL.createObjectURL(new Blob([out],{type:"image/png"}));
+      const a=$("dl"); a.href=url; a.download=fname; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    });
+  },"image/png");
+}
+$("expFull").onclick=()=>exportPNG(true);
+$("expQuiz").onclick=()=>exportPNG(false);
+
+// ---- PNG pHYs chunk insertion (embeds physical resolution = DPI) ----
+const CRCT=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(bytes){ let c=0xffffffff; for(let i=0;i<bytes.length;i++) c=CRCT[(c^bytes[i])&0xff]^(c>>>8); return (c^0xffffffff)>>>0; }
+function withPhys(png,dpi){
+  const ppm=Math.round(dpi/0.0254);   // pixels per metre (1 inch = 0.0254 m)
+  const data=new Uint8Array(9);
+  const dv=new DataView(data.buffer); dv.setUint32(0,ppm); dv.setUint32(4,ppm); data[8]=1; // unit = metre
+  const type=[0x70,0x48,0x59,0x73];   // "pHYs"
+  const chunk=new Uint8Array(4+4+9+4); const cv=new DataView(chunk.buffer);
+  cv.setUint32(0,9); chunk.set(type,4); chunk.set(data,8);
+  const crc=crc32(new Uint8Array([...type,...data])); cv.setUint32(17,crc);
+  // insert immediately after IHDR: signature(8) + IHDR chunk(25) = 33
+  const out=new Uint8Array(png.length+chunk.length);
+  out.set(png.slice(0,33),0); out.set(chunk,33); out.set(png.slice(33),33+chunk.length);
+  return out;
+}
+
+/* ---------- project save/load (self-contained JSON) ---------- */
+function projectJSON(){
+  return JSON.stringify({
+    v:2, layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, wmm:+$("wmm").value, dpi:+$("dpi").value,
+    images: images.map(im=>({id:im.id,name:im.name,src:im.img.src})),
+    cells: cells.map(c=>({imgId:c.imgId,zoom:c.zoom,ox:c.ox,oy:c.oy,rot:c.rot,page2:c.page2,labelText:c.labelText,bd:c.bd,bdColor:c.bdColor,arrows:c.arrows}))
+  });
+}
+function loadProject(o){
+  layoutName=o.layoutName||"level"; customDef=o.customDef||customDef; gutter=o.gutter??10; bgColor=o.bgColor||"#000000";
+  labelOpts=Object.assign({show:true,upper:true,chip:false,size:34,color:"#ffffff"},o.labelOpts||{});
+  frameOpts=Object.assign({show:false,color:"#ffffff",width:3,radius:0},o.frameOpts||{});
+  $("preset").value=PRESETS[layoutName]?layoutName:(layoutName==="custom"?"custom":"level");
+  $("gutter").value=gutter; $("bg").value=bgColor; $("wmm").value=o.wmm||174; $("dpi").value=o.dpi||600;
+  $("lblShow").checked=labelOpts.show; $("lblUpper").checked=labelOpts.upper; $("lblChip").checked=labelOpts.chip;
+  $("lblSize").value=labelOpts.size; $("lblColor").value=labelOpts.color;
+  $("frShow").checked=frameOpts.show; $("frColor").value=frameOpts.color; $("frWidth").value=frameOpts.width; $("frRadius").value=frameOpts.radius;
+  imgSeq=0; images=[];
+  let pending=(o.images||[]).length;
+  const finish=()=>{ buildTray(); buildLayout();
+    (o.cells||[]).forEach((cd,i)=>{ if(cells[i]) Object.assign(cells[i],cd); });
+    render(); sync();
+  };
+  if(!pending){ finish(); return; }
+  (o.images||[]).forEach(rec=>{ const im=new Image(); im.onload=()=>{
+    images.push({id:rec.id,name:rec.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
+    imgSeq=Math.max(imgSeq,rec.id); if(--pending===0) finish();
+  }; im.src=rec.src; });
+}
+$("save").onclick=()=>{ const url=URL.createObjectURL(new Blob([projectJSON()],{type:"application/json"})); const a=$("dl"); a.href=url; a.download="figure-project.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000); };
+$("loadp").onclick=()=>$("pfile").click();
+$("pfile").onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ loadProject(JSON.parse(rd.result)); }catch(err){ alert("Bad project file: "+err); } }; rd.readAsText(f); };
+
+function saveLocal(){ try{ localStorage.setItem("figure-builder-v2", projectJSON()); }catch(e){} }
+
+/* ---------- drag & drop (files / project) ---------- */
+const drop=$("drop");
+["dragenter","dragover"].forEach(ev=>window.addEventListener(ev,e=>{ if(dragImageId!=null) return; e.preventDefault(); drop.style.display="flex"; }));
+["dragleave","drop"].forEach(ev=>window.addEventListener(ev,e=>{ e.preventDefault(); if(ev==="drop"||e.clientX<=0){ drop.style.display="none"; } }));
+window.addEventListener("drop",e=>{
+  if(dragImageId!=null) return; // handled by the canvas thumbnail drop
+  e.preventDefault(); drop.style.display="none";
+  const fs=[...e.dataTransfer.files]; const proj=fs.find(f=>f.name.endsWith(".json"));
+  if(proj){ const rd=new FileReader(); rd.onload=()=>{ try{ loadProject(JSON.parse(rd.result)); }catch(err){ alert(err); } }; rd.readAsText(proj); }
+  else addFiles(fs);
+});
+
+window.addEventListener("resize",()=>{ resizeStage(); drawScreen(); });
+window.addEventListener("keydown",e=>{ if((e.key==="Delete"||e.key==="Backspace")&&selCell>=0&&selArrow>=0&&document.activeElement.tagName!=="INPUT"){ cells[selCell].arrows.splice(selArrow,1); selArrow=-1; drawScreen(); saveLocal(); } });
+
+/* ---------- boot ---------- */
+(function boot(){
+  const saved=localStorage.getItem("figure-builder-v2") || localStorage.getItem("icm-figure-builder-v1");
+  if(saved){ try{ loadProject(JSON.parse(saved)); return; }catch(e){} }
+  render(); sync();
+})();
+</script>
