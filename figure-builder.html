@@ -1,5 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
+<!-- Privacy guarantee, enforced by the browser: this page may not open ANY network
+     connection (connect-src 'none'), load no remote scripts, styles, fonts or images.
+     Images you add are read locally as data: URLs; exports are local blob: downloads.
+     Your images physically cannot leave your computer through this file. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Clinical Panel Figure Builder — multi-panel figures for journal submission</title>
 <style>
   :root{ --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2b303b; --txt:#e7e9ee; --mut:#9aa0ac; --acc:#5b8cff; --warn:#ffcc00; }
@@ -71,6 +76,15 @@
       <span class="k">×</span>
       <input type="number" id="dpi" value="600" min="72" max="2400" step="50"> dpi
       <span class="dpipre"><button class="sm" data-dpi="300">300</button><button class="sm" data-dpi="600">600</button><button class="sm" data-dpi="1200">1200</button></span>
+      <select id="jpreset" title="Common publisher figure standards (width × resolution). These are typical conventions — always confirm the exact numbers in your target journal's author guidelines.">
+        <option value="">preset…</option>
+        <option value="85,300">Single col · 85 mm · 300 dpi (halftone/photo)</option>
+        <option value="85,600">Single col · 85 mm · 600 dpi (combination)</option>
+        <option value="114,600">1.5 col · 114 mm · 600 dpi</option>
+        <option value="174,300">Double col · 174 mm · 300 dpi (halftone/photo)</option>
+        <option value="174,600">Double col · 174 mm · 600 dpi (combination)</option>
+        <option value="174,1200">Line art · 174 mm · 1200 dpi</option>
+      </select>
     </div>
     <div class="grp">
       <button class="pri" id="expFull">Export complete</button>
@@ -149,6 +163,19 @@
     </div>
 
     <div class="hint">Tip: use arrow colors as a legend for your figure (e.g. one color per finding). Fully editable.</div>
+
+    <div class="card">
+      <details>
+        <summary class="lbl" style="margin-top:0; cursor:pointer; display:list-item; list-style-position:inside;">De-identification checklist</summary>
+        <div class="hint" style="margin:6px 0">This tool uploads nothing and burns nothing extra in — but it also can't scrub identifiers already inside your source images. Confirm each before submitting:</div>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>No patient name, MRN, or dates visible in the image pixels</span></label>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>Faces / identifiable features removed, or written consent on file</span></label>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>DICOM / scanner burned-in annotations &amp; overlays removed</span></label>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>Institution / device identifiers not visible</span></label>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>Source exported as plain image — no embedded DICOM/EXIF metadata reused</span></label>
+        <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>Journal's specific privacy / consent requirements checked</span></label>
+      </details>
+    </div>
   </aside>
 </div>
 
@@ -557,6 +584,7 @@ $("wmm").oninput=onOutChange;
 $("dpi").oninput=onOutChange;
 document.querySelectorAll("[data-dpi]").forEach(b=>b.onclick=()=>{ $("dpi").value=b.dataset.dpi; onOutChange(); });
 document.querySelectorAll("[data-mm]").forEach(b=>b.onclick=()=>{ $("wmm").value=b.dataset.mm; onOutChange(); });
+$("jpreset").onchange=e=>{ const v=e.target.value; if(!v){ return; } const [w,d]=v.split(","); $("wmm").value=w; $("dpi").value=d; onOutChange(); e.target.value=""; };
 
 /* ---------- export (PNG with correct DPI via pHYs) ---------- */
 function renderOffscreen(includePage2){

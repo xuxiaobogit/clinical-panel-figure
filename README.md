@@ -1,15 +1,17 @@
 # Clinical Panel Figure Builder
 
-A single-file, offline, browser-based tool for assembling **multi-panel figures for journal
-submission** — especially clinical/medical composites where several sub-images (ultrasound, CT,
-MRI, MRCP, endoscopy, intra-op photos, etc.) are tiled into one labelled figure. Grid layout,
-per-panel crop/zoom/rotate, customizable panel frames, burned-in letter labels, colored arrows,
-and a **print-ready PNG export with honest, verifiable DPI**.
+A **local-first, privacy-preserving, DPI-audited** single-file tool for assembling **multi-panel
+figures for biomedical publication** — especially clinical/medical composites where several
+sub-images (ultrasound, CT, MRI, MRCP, endoscopy, intra-op photos, etc.) are tiled into one
+labelled figure. Grid layout, per-panel crop/zoom/rotate, customizable panel frames, burned-in
+letter labels, colored arrows, and a **print-ready PNG export with honest, verifiable DPI**.
 
-No install, no server, no upload — your images never leave your computer.
+It runs entirely in your browser from one HTML file. No install, no server, no upload — and a
+Content-Security-Policy baked into the file forbids the page from opening *any* network
+connection, so your images physically cannot leave your computer.
 
-> **Status: provided as-is, not actively maintained.** A self-contained single HTML file with no
-> dependencies and no backend. MIT-licensed — feel free to fork and modify.
+> **Status: v0.1.0 — first public release.** A self-contained single HTML file with no
+> dependencies and no backend. MIT-licensed — free to use, fork, and modify.
 
 ## Use it
 
@@ -28,6 +30,11 @@ No install, no server, no upload — your images never leave your computer.
   figure units, so they scale correctly with the export.
 - **Labels** — auto A–I (upper/lower case, size, color, optional chip background) + per-panel text override.
 - **Arrows** — add, drag endpoints, recolor, width. Set your own color legend for the figure.
+- **Publisher presets** — one click sets width × DPI to common journal conventions (single column
+  85 mm / 1.5 column 114 mm / double column 174 mm, at 300 / 600 / 1200 dpi). Always confirm the
+  exact numbers in your target journal's author guidelines.
+- **De-identification checklist** — a built-in pre-export reminder of the identifiers this tool
+  *cannot* scrub for you (names/MRN/dates burned into pixels, faces, DICOM overlays, embedded metadata).
 - **Gutter** and **background** color.
 - **Two-page export** — flag panels as *page-2 only* → *Export page-1 subset* drops those rows and
   re-letters, while *Export complete* renders everything.
@@ -39,7 +46,21 @@ No install, no server, no upload — your images never leave your computer.
 - **Save / Open project** — self-contained JSON (images + all transforms/frames/arrows), plus autosave so
   you don't lose work on refresh. The **New** button clears it to start fresh.
 
-## About the DPI (is it real?)
+## Privacy
+
+Your images never leave your machine, and that is enforced two independent ways:
+
+- **No network code.** The file contains no `fetch` / `XMLHttpRequest`, and loads no remote scripts,
+  styles, fonts, or images. Images you add are read locally as `data:` URLs; exports are local
+  `blob:` downloads.
+- **Browser-enforced.** A `Content-Security-Policy` meta tag sets `connect-src 'none'` (with
+  `default-src 'none'`), so even a *modified* copy of the file cannot open a connection — the
+  browser blocks it outright.
+
+The tool cannot, however, remove identifiers already *inside* your source images. The in-app
+**de-identification checklist** lists what you remain responsible for.
+
+## About the DPI (is it real?) — and how to check it yourself
 
 Yes. Two independent things are both correct:
 
@@ -48,6 +69,18 @@ Yes. Two independent things are both correct:
    target size, not upscaled from the screen preview.
 2. **The embedded DPI tag matches.** The PNG `pHYs` chunk stores pixels-per-metre = `DPI / 0.0254`
    (600 dpi → 23 622 ppm). Photoshop / journal systems read this and report exactly 600 dpi at 174 mm.
+
+**Don't take my word for it — audit any exported PNG** with the included script (Python 3, standard
+library only, no dependencies):
+
+```sh
+python validate_dpi.py Figure-complete-600dpi.png --width-mm 174 --expect-dpi 600
+```
+
+It decodes the raw PNG bytes and reports the true pixel size (from IHDR), the embedded resolution
+(from pHYs) converted to DPI, the physical size those imply, and whether the metadata CRC is valid —
+then verifies the round trip `pixels == round(width_mm / 25.4 × dpi)`. Exit code `0` means the file
+is self-consistent; `1` flags any mismatch.
 
 The one thing DPI metadata *can't* fix: a low-resolution **source image** stretched across a large panel.
 The figure is still 600 dpi, but that image's real detail isn't. The readout's *"src ≈ N dpi"* value
