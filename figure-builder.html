@@ -78,7 +78,7 @@
     </div>
     <div class="grp"><span class="pill" id="outInfo" title="">—</span></div>
     <div class="sep"></div>
-    <div class="grp"><button id="save">Save project</button><button id="loadp">Open project</button><input type="file" id="pfile" accept=".json" hidden></div>
+    <div class="grp"><button id="newp">New</button><button id="save">Save project</button><button id="loadp">Open project</button><input type="file" id="pfile" accept=".json" hidden></div>
   </header>
 
   <aside class="left">
@@ -632,6 +632,12 @@ function loadProject(o){
   }; im.src=rec.src; });
 }
 $("save").onclick=()=>{ const url=URL.createObjectURL(new Blob([projectJSON()],{type:"application/json"})); const a=$("dl"); a.href=url; a.download="figure-project.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000); };
+$("newp").onclick=()=>{
+  if(!confirm("Start a new, empty figure? This clears the images and layout currently in this browser. (Your exported images and any saved .json project files are NOT affected.)")) return;
+  images=[]; imgSeq=0; selImageId=null; selCell=-1; selArrow=-1; cells=[];
+  try{ localStorage.removeItem("figure-builder-v2"); localStorage.removeItem("icm-figure-builder-v1"); }catch(e){}
+  buildTray(); render(); sync();
+};
 $("loadp").onclick=()=>$("pfile").click();
 $("pfile").onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ loadProject(JSON.parse(rd.result)); }catch(err){ alert("Bad project file: "+err); } }; rd.readAsText(f); };
 
