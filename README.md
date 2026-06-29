@@ -10,8 +10,9 @@ It runs entirely in your browser from one HTML file. No install, no server, no u
 Content-Security-Policy baked into the file forbids the page from opening *any* network
 connection, so your images physically cannot leave your computer.
 
-> **Status: v0.1.0 — first public release.** A self-contained single HTML file with no
-> dependencies and no backend. MIT-licensed — free to use, fork, and modify.
+> **Status: v0.2.0.** Adds per-panel free rotation, a show/hide toggle for arrows, and a
+> screen-only alignment grid. A self-contained single HTML file with no dependencies and no
+> backend. MIT-licensed — free to use, fork, and modify.
 
 ## Use it
 
