@@ -69,6 +69,7 @@
     </div>
     <div class="grp"><span class="k">Gutter</span><input type="range" id="gutter" min="0" max="40" value="10" style="width:80px"></div>
     <div class="grp"><span class="k">BG</span><input type="color" id="bg" value="#000000" class="colbtn" style="width:34px;height:26px"></div>
+    <div class="grp"><label class="k" style="cursor:pointer" title="Show an alignment grid over the canvas. Screen aid only — it is never drawn into exported PNGs."><input type="checkbox" id="grid"> grid</label></div>
     <div class="sep"></div>
     <div class="grp"><span class="k">Out</span>
       <input type="number" id="wmm" value="174" min="20" max="500" step="1"> mm
@@ -134,7 +135,8 @@
           <button class="sm" id="resetT">reset crop</button>
         </div>
         <div class="row"><span class="k" style="width:34px">zoom</span><input type="range" id="zoom" min="100" max="500" value="100"></div>
-        <div class="hint">Drag inside the panel to pan · wheel to zoom.</div>
+        <div class="row"><span class="k" style="width:34px">rotate</span><input type="range" id="rotF" min="-180" max="180" step="1" value="0"><span class="k" id="rotV" style="width:30px;text-align:right">0°</span></div>
+        <div class="hint">Drag inside the panel to pan · wheel to zoom · 90° buttons or the slider to rotate (image stays cropped to fill the panel).</div>
         <div class="row"><span class="k" style="width:40px">border</span>
           <select id="cellBd"><option value="inherit">default</option><option value="on">on</option><option value="off">off</option></select>
           <input type="color" id="cellBdColor" value="#ffffff" class="colbtn" title="override this panel's border color">
@@ -147,6 +149,7 @@
 
     <div class="card" id="arrowCard" style="display:none">
       <span class="lbl" style="margin-top:0">Arrows</span>
+      <div class="row"><label><input type="checkbox" id="arrowsShow" checked> show arrows (preview &amp; export)</label></div>
       <div class="row">
         <button class="sm" id="addArrow">+ arrow</button>
         <button class="sm" id="delArrow">delete</button>
@@ -203,6 +206,7 @@ let layoutName = "level";
 let gutter = 10, bgColor = "#000000";
 let selCell = -1, selArrow = -1;
 let arrowColor = "#ff3b30";
+let arrowsShow = true, gridShow = false;
 let labelOpts = { show:true, upper:true, chip:false, size:34, color:"#ffffff" };
 let frameOpts = { show:false, color:"#ffffff", width:3, radius:0 };
 let selImageId = null;
@@ -267,10 +271,14 @@ function subsetGeom(){
 
 /* ---------- helpers ---------- */
 function imgById(id){ return images.find(i=>i.id===id); }
-function effDims(im, rot){ return (rot%180===0)?[im.w,im.h]:[im.h,im.w]; }
+// axis-aligned bounding box (w,h) of a w×h rectangle rotated by `deg` degrees
+function rotBBox(w, h, deg){ const r=deg*Math.PI/180, c=Math.abs(Math.cos(r)), s=Math.abs(Math.sin(r)); return [w*c+h*s, w*s+h*c]; }
+// normalize an angle to (-180, 180]
+function norm180(d){ d=((d%360)+360)%360; return d>180?d-360:d; }
+// minimum image scale so the cell stays fully covered at any rotation (no gaps, never distorts)
 function coverScaleFor(cell, im, rot){
-  const [ew,eh] = effDims(im,rot);
-  return Math.max(cell.w/ew, cell.h/eh);
+  const r=rot*Math.PI/180, c=Math.abs(Math.cos(r)), s=Math.abs(Math.sin(r));
+  return Math.max((cell.w*c+cell.h*s)/im.w, (cell.w*s+cell.h*c)/im.h);
 }
 function effBorder(cell){
   const show = cell.bd==="on" ? true : cell.bd==="off" ? false : frameOpts.show;
@@ -295,8 +303,8 @@ function drawImageInto(g, cell, c, radius, screen){
   g.clip();
   const im=imgById(cell.imgId);
   if(im){
-    const base=coverScaleFor(cell,im,cell.rot), s=base*cell.zoom, [ew,eh]=effDims(im,cell.rot);
-    const drawW=ew*s, drawH=eh*s;
+    const base=coverScaleFor(cell,im,cell.rot), s=base*cell.zoom;
+    const [drawW,drawH]=rotBBox(im.w*s, im.h*s, cell.rot);
     const maxOX=Math.max(0,(drawW-cell.w)/2), maxOY=Math.max(0,(drawH-cell.h)/2);
     cell.ox=Math.max(-maxOX,Math.min(maxOX,cell.ox));
     cell.oy=Math.max(-maxOY,Math.min(maxOY,cell.oy));
@@ -361,9 +369,11 @@ function paint(g, c, opts){
   for(const {cell,letter} of drawCells){
     drawImageInto(g, cell, c, effBorder(cell).radius, opts.screen);
     drawBorderInto(g, cell, c);
-    for(let ai=0;ai<cell.arrows.length;ai++){
-      const hot = !!(opts.screen && include && cells[selCell]===cell && ai===selArrow);
-      drawArrowInto(g, cell, cell.arrows[ai], c, hot);
+    if(arrowsShow){
+      for(let ai=0;ai<cell.arrows.length;ai++){
+        const hot = !!(opts.screen && include && cells[selCell]===cell && ai===selArrow);
+        drawArrowInto(g, cell, cell.arrows[ai], c, hot);
+      }
     }
     drawLabelInto(g, cell, letter, c);
   }
@@ -377,6 +387,25 @@ function drawScreen(){
   const c=displayScale;
   stage.width=Math.round(geom.W*c); stage.height=Math.round(geom.H*c);
   paint(ctx, c, {screen:true, includePage2:true});
+  drawGrid(ctx, c);
+}
+// alignment grid — drawn on the live canvas ONLY; never part of any exported PNG
+function drawGrid(g, c){
+  if(!gridShow || !geom) return;
+  const W=geom.W*c, H=geom.H*c;
+  const lines=(step,style)=>{
+    g.strokeStyle=style; g.lineWidth=1; g.beginPath();
+    for(let x=0;x<=geom.W+0.001;x+=step){ const px=Math.round(x*c)+0.5; g.moveTo(px,0); g.lineTo(px,H); }
+    for(let y=0;y<=geom.H+0.001;y+=step){ const py=Math.round(y*c)+0.5; g.moveTo(0,py); g.lineTo(W,py); }
+    g.stroke();
+  };
+  g.save();
+  lines(50,  "rgba(91,140,255,0.13)");   // minor
+  lines(250, "rgba(91,140,255,0.30)");   // major
+  g.strokeStyle="rgba(255,204,0,0.55)"; g.lineWidth=1; g.beginPath();   // center cross
+  const cx=Math.round(geom.W/2*c)+0.5, cy=Math.round(geom.H/2*c)+0.5;
+  g.moveTo(cx,0); g.lineTo(cx,H); g.moveTo(0,cy); g.lineTo(W,cy); g.stroke();
+  g.restore();
 }
 function resizeStage(){
   const main=document.getElementById("main");
@@ -436,7 +465,7 @@ function cellAt(p){
   return -1;
 }
 function arrowHandleAt(p){
-  if(selCell<0) return null;
+  if(selCell<0 || !arrowsShow) return null;
   const cell=cells[selCell];
   for(let ai=0;ai<cell.arrows.length;ai++){
     const a=cell.arrows[ai];
@@ -535,6 +564,8 @@ function sync(){
     const im=imgById(cell.imgId);
     document.getElementById("cellImg").textContent=im?`${im.name} (${im.w}×${im.h})`:"empty — click a thumbnail to place";
     document.getElementById("zoom").value=Math.round(cell.zoom*100);
+    const rd=Math.round(norm180(cell.rot||0));
+    document.getElementById("rotF").value=rd; document.getElementById("rotV").textContent=rd+"°";
     document.getElementById("page2").checked=!!cell.page2;
     document.getElementById("lblText").value=cell.labelText||"";
     document.getElementById("cellBd").value=cell.bd||"inherit";
@@ -552,6 +583,7 @@ $("preset").onchange=e=>{ layoutName=e.target.value; if(layoutName==="custom"){
 } selCell=-1; render(); sync(); };
 $("gutter").oninput=e=>{ gutter=+e.target.value; render(); };
 $("bg").oninput=e=>{ bgColor=e.target.value; drawScreen(); saveLocal(); };
+$("grid").onchange=e=>{ gridShow=e.target.checked; drawScreen(); saveLocal(); };
 $("lblShow").onchange=e=>{ labelOpts.show=e.target.checked; drawScreen(); saveLocal(); };
 $("lblUpper").onchange=e=>{ labelOpts.upper=e.target.checked; drawScreen(); saveLocal(); };
 $("lblChip").onchange=e=>{ labelOpts.chip=e.target.checked; drawScreen(); saveLocal(); };
@@ -562,16 +594,25 @@ $("frColor").oninput=e=>{ frameOpts.color=e.target.value; drawScreen(); saveLoca
 $("frWidth").oninput=e=>{ frameOpts.width=+e.target.value; drawScreen(); saveLocal(); };
 $("frRadius").oninput=e=>{ frameOpts.radius=+e.target.value; drawScreen(); saveLocal(); };
 $("zoom").oninput=e=>{ if(selCell<0)return; cells[selCell].zoom=(+e.target.value)/100; drawScreen(); updateReadout(); saveLocal(); };
-$("rotL").onclick=()=>{ if(selCell<0)return; cells[selCell].rot=(cells[selCell].rot+270)%360; cells[selCell].ox=0;cells[selCell].oy=0; drawScreen(); saveLocal(); };
-$("rotR").onclick=()=>{ if(selCell<0)return; cells[selCell].rot=(cells[selCell].rot+90)%360; cells[selCell].ox=0;cells[selCell].oy=0; drawScreen(); saveLocal(); };
+function setRot(deg, resetPan){
+  if(selCell<0) return;
+  const cell=cells[selCell]; cell.rot=norm180(deg);
+  if(resetPan){ cell.ox=0; cell.oy=0; }
+  const rd=Math.round(cell.rot);
+  $("rotF").value=rd; $("rotV").textContent=rd+"°";
+  drawScreen(); updateReadout(); saveLocal();
+}
+$("rotL").onclick=()=>{ if(selCell<0)return; setRot(cells[selCell].rot-90, true); };
+$("rotR").onclick=()=>{ if(selCell<0)return; setRot(cells[selCell].rot+90, true); };
+$("rotF").oninput=e=>{ setRot(+e.target.value, false); };
 $("clearImg").onclick=()=>{ if(selCell<0)return; cells[selCell].imgId=null; sync(); drawScreen(); updateReadout(); saveLocal(); };
-$("resetT").onclick=()=>{ if(selCell<0)return; Object.assign(cells[selCell],{zoom:1,ox:0,oy:0,rot:0}); $("zoom").value=100; drawScreen(); updateReadout(); saveLocal(); };
+$("resetT").onclick=()=>{ if(selCell<0)return; Object.assign(cells[selCell],{zoom:1,ox:0,oy:0,rot:0}); $("zoom").value=100; $("rotF").value=0; $("rotV").textContent="0°"; drawScreen(); updateReadout(); saveLocal(); };
 $("page2").onchange=e=>{ if(selCell<0)return; cells[selCell].page2=e.target.checked; drawScreen(); saveLocal(); };
 $("lblText").oninput=e=>{ if(selCell<0)return; cells[selCell].labelText=e.target.value; drawScreen(); saveLocal(); };
 $("cellBd").onchange=e=>{ if(selCell<0)return; cells[selCell].bd=e.target.value; drawScreen(); saveLocal(); };
 $("cellBdColor").oninput=e=>{ if(selCell<0)return; cells[selCell].bdColor=e.target.value; drawScreen(); saveLocal(); };
 $("cellBdColorClear").onclick=()=>{ if(selCell<0)return; cells[selCell].bdColor=null; $("cellBdColor").value=frameOpts.color; drawScreen(); saveLocal(); };
-$("addArrow").onclick=()=>{ if(selCell<0)return; cells[selCell].arrows.push({x1:.7,y1:.7,x2:.45,y2:.45,color:arrowColor,width:6}); selArrow=cells[selCell].arrows.length-1; drawScreen(); saveLocal(); };
+$("addArrow").onclick=()=>{ if(selCell<0)return; if(!arrowsShow){ arrowsShow=true; $("arrowsShow").checked=true; } cells[selCell].arrows.push({x1:.7,y1:.7,x2:.45,y2:.45,color:arrowColor,width:6}); selArrow=cells[selCell].arrows.length-1; drawScreen(); saveLocal(); };
 $("delArrow").onclick=()=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; drawScreen(); saveLocal(); };
 $("arrowW").oninput=e=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows[selArrow].width=+e.target.value; drawScreen(); saveLocal(); };
 document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
@@ -579,6 +620,7 @@ document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
   arrowColor=s.dataset.c; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); }
 });
 $("arrowCustom").oninput=e=>{ arrowColor=e.target.value; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); } };
+$("arrowsShow").onchange=e=>{ arrowsShow=e.target.checked; drawScreen(); saveLocal(); };
 function onOutChange(){ updateReadout(); saveLocal(); }
 $("wmm").oninput=onOutChange;
 $("dpi").oninput=onOutChange;
@@ -633,7 +675,7 @@ function withPhys(png,dpi){
 /* ---------- project save/load (self-contained JSON) ---------- */
 function projectJSON(){
   return JSON.stringify({
-    v:2, layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, wmm:+$("wmm").value, dpi:+$("dpi").value,
+    v:2, layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, arrowsShow, gridShow, wmm:+$("wmm").value, dpi:+$("dpi").value,
     images: images.map(im=>({id:im.id,name:im.name,src:im.img.src})),
     cells: cells.map(c=>({imgId:c.imgId,zoom:c.zoom,ox:c.ox,oy:c.oy,rot:c.rot,page2:c.page2,labelText:c.labelText,bd:c.bd,bdColor:c.bdColor,arrows:c.arrows}))
   });
@@ -642,11 +684,13 @@ function loadProject(o){
   layoutName=o.layoutName||"level"; customDef=o.customDef||customDef; gutter=o.gutter??10; bgColor=o.bgColor||"#000000";
   labelOpts=Object.assign({show:true,upper:true,chip:false,size:34,color:"#ffffff"},o.labelOpts||{});
   frameOpts=Object.assign({show:false,color:"#ffffff",width:3,radius:0},o.frameOpts||{});
+  arrowsShow = o.arrowsShow!==false; gridShow = !!o.gridShow;
   $("preset").value=PRESETS[layoutName]?layoutName:(layoutName==="custom"?"custom":"level");
   $("gutter").value=gutter; $("bg").value=bgColor; $("wmm").value=o.wmm||174; $("dpi").value=o.dpi||600;
   $("lblShow").checked=labelOpts.show; $("lblUpper").checked=labelOpts.upper; $("lblChip").checked=labelOpts.chip;
   $("lblSize").value=labelOpts.size; $("lblColor").value=labelOpts.color;
   $("frShow").checked=frameOpts.show; $("frColor").value=frameOpts.color; $("frWidth").value=frameOpts.width; $("frRadius").value=frameOpts.radius;
+  $("arrowsShow").checked=arrowsShow; $("grid").checked=gridShow;
   imgSeq=0; images=[];
   let pending=(o.images||[]).length;
   const finish=()=>{ buildTray(); buildLayout();
@@ -663,6 +707,7 @@ $("save").onclick=()=>{ const url=URL.createObjectURL(new Blob([projectJSON()],{
 $("newp").onclick=()=>{
   if(!confirm("Start a new, empty figure? This clears the images and layout currently in this browser. (Your exported images and any saved .json project files are NOT affected.)")) return;
   images=[]; imgSeq=0; selImageId=null; selCell=-1; selArrow=-1; cells=[];
+  arrowsShow=true; gridShow=false; $("arrowsShow").checked=true; $("grid").checked=false;
   try{ localStorage.removeItem("figure-builder-v2"); localStorage.removeItem("icm-figure-builder-v1"); }catch(e){}
   buildTray(); render(); sync();
 };

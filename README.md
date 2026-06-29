@@ -23,13 +23,17 @@ connection, so your images physically cannot leave your computer.
 
 - **Load images** — file picker or drag-drop anywhere. Thumbnails show pixel dimensions.
 - **Layouts** — *By level A–I (2·1·2·2·2)*, grids 3×3 / 2×4 / 2×3 / 2×2, row of 2/3, or custom R×C.
-- **Per-panel crop** — drag to pan, wheel/slider to zoom, rotate 90°, reset. Cover-fit, never distorts.
+- **Per-panel crop** — drag to pan, wheel/slider to zoom, rotate (90° steps **or any angle** via the
+  slider), reset. Cover-fit at any rotation: the panel stays filled, the image is never distorted.
 - **Place images two ways** — drag a thumbnail straight onto a panel, or select a panel then click a thumbnail.
 - **Panel frames** — global border style (color · width · corner radius) applied to all panels, with a
   **per-panel override**: turn a panel's border on/off or give it its own color. Width and corner are in
   figure units, so they scale correctly with the export.
 - **Labels** — auto A–I (upper/lower case, size, color, optional chip background) + per-panel text override.
-- **Arrows** — add, drag endpoints, recolor, width. Set your own color legend for the figure.
+- **Arrows** — add, drag endpoints, recolor, width, and a one-click **show/hide** for all arrows so you
+  can export a clean, annotation-free version of the same figure. Set your own color legend for the figure.
+- **Alignment grid** — toggle a grid + center-cross overlay to line panels, labels and arrows up by eye.
+  It is a screen-only guide and is **never** drawn into the exported PNG.
 - **Publisher presets** — one click sets width × DPI to common journal conventions (single column
   85 mm / 1.5 column 114 mm / double column 174 mm, at 300 / 600 / 1200 dpi). Always confirm the
   exact numbers in your target journal's author guidelines.
