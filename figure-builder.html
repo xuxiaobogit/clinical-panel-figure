@@ -23,6 +23,7 @@
   header .grp{ display:flex; gap:6px; align-items:center; }
   header .sep{ width:1px; height:22px; background:var(--line); }
   h1{ font-size:14px; margin:0 8px 0 0; font-weight:600; }
+  h1 .ver{ font-size:10px; color:var(--mut); font-weight:400; vertical-align:2px; }
   aside{ background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:10px; }
   aside.right{ border-right:0; border-left:1px solid var(--line); }
   main{ position:relative; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:18px; }
@@ -33,6 +34,8 @@
   .thumb .nm{ font-size:11px; color:var(--mut); padding:3px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .thumb.sel{ border-color:var(--acc); }
   .thumb .dim{ position:absolute; top:3px; right:4px; font-size:10px; background:rgba(0,0,0,.6); padding:1px 4px; border-radius:4px; color:var(--mut); }
+  .thumb .rm{ position:absolute; top:3px; left:4px; width:18px; height:18px; padding:0; line-height:1; font-size:12px; border-radius:4px; background:rgba(0,0,0,.6); color:var(--mut); }
+  .thumb .rm:hover{ color:#fff; border-color:#a34040; background:rgba(120,25,25,.85); }
   .lbl{ font-size:11px; color:var(--mut); display:block; margin:10px 0 3px; text-transform:uppercase; letter-spacing:.04em; }
   .row{ display:flex; gap:6px; align-items:center; margin:5px 0; flex-wrap:wrap; }
   .swatch{ width:22px; height:22px; border-radius:5px; border:2px solid transparent; cursor:pointer; }
@@ -52,9 +55,7 @@
 
 <div class="app">
   <header>
-    <h1>Clinical Panel Figure Builder</h1>
-    <div class="grp"><button class="pri" id="load">Load images…</button><input type="file" id="file" accept="image/*" multiple hidden></div>
-    <div class="sep"></div>
+    <h1>Clinical Panel Figure Builder <span class="ver">v0.3.0</span></h1>
     <div class="grp"><span class="k">Layout</span>
       <select id="preset">
         <option value="level">By level A–I (2·1·2·2·2)</option>
@@ -97,8 +98,10 @@
   </header>
 
   <aside class="left">
-    <span class="lbl">Images</span>
-    <div class="hint" id="trayhint">Drag image files anywhere, or “Load images”. Then drag a thumbnail onto a panel — or select a panel and click a thumbnail.</div>
+    <span class="lbl" style="margin-top:0">Images</span>
+    <button class="pri" id="load" style="width:100%; margin:2px 0 8px">Load images…</button>
+    <input type="file" id="file" accept="image/*" multiple hidden>
+    <div class="hint" id="trayhint" style="margin-bottom:8px">Drag image files anywhere, or “Load images”. Then drag a thumbnail onto a panel — or select a panel and click a thumbnail.</div>
     <div class="tray" id="tray"></div>
   </aside>
 
@@ -271,14 +274,34 @@ function subsetGeom(){
 
 /* ---------- helpers ---------- */
 function imgById(id){ return images.find(i=>i.id===id); }
-// axis-aligned bounding box (w,h) of a w×h rectangle rotated by `deg` degrees
-function rotBBox(w, h, deg){ const r=deg*Math.PI/180, c=Math.abs(Math.cos(r)), s=Math.abs(Math.sin(r)); return [w*c+h*s, w*s+h*c]; }
 // normalize an angle to (-180, 180]
 function norm180(d){ d=((d%360)+360)%360; return d>180?d-360:d; }
 // minimum image scale so the cell stays fully covered at any rotation (no gaps, never distorts)
 function coverScaleFor(cell, im, rot){
   const r=rot*Math.PI/180, c=Math.abs(Math.cos(r)), s=Math.abs(Math.sin(r));
   return Math.max((cell.w*c+cell.h*s)/im.w, (cell.w*s+cell.h*c)/im.h);
+}
+// exact pan clamp: every corner of the cell must lie inside the rotated, scaled image,
+// so background can never show through. (Clamping to the rotated image's bounding box
+// over-permits at free angles — corners could peek out.) The feasible offsets form a
+// convex set that always contains (0,0) at cover scale, so cyclic projection converges.
+function clampPan(cell, im){
+  const s=coverScaleFor(cell,im,cell.rot)*cell.zoom;
+  const hx=im.w*s/2, hy=im.h*s/2;
+  const r=cell.rot*Math.PI/180, co=Math.cos(r), si=Math.sin(r);
+  const corners=[[-cell.w/2,-cell.h/2],[cell.w/2,-cell.h/2],[cell.w/2,cell.h/2],[-cell.w/2,cell.h/2]];
+  let ox=cell.ox, oy=cell.oy;
+  for(let it=0; it<12; it++){
+    let moved=false;
+    for(const [px,py] of corners){
+      const dx=px-ox, dy=py-oy;                    // cell corner relative to image centre (figure frame)
+      const qx=co*dx+si*dy, qy=-si*dx+co*dy;       // ... in the image's rotated frame
+      const ex=qx>hx?qx-hx:qx<-hx?qx+hx:0, ey=qy>hy?qy-hy:qy<-hy?qy+hy:0;
+      if(ex||ey){ ox+=co*ex-si*ey; oy+=si*ex+co*ey; moved=true; }
+    }
+    if(!moved) break;
+  }
+  cell.ox=ox; cell.oy=oy;
 }
 function effBorder(cell){
   const show = cell.bd==="on" ? true : cell.bd==="off" ? false : frameOpts.show;
@@ -304,10 +327,7 @@ function drawImageInto(g, cell, c, radius, screen){
   const im=imgById(cell.imgId);
   if(im){
     const base=coverScaleFor(cell,im,cell.rot), s=base*cell.zoom;
-    const [drawW,drawH]=rotBBox(im.w*s, im.h*s, cell.rot);
-    const maxOX=Math.max(0,(drawW-cell.w)/2), maxOY=Math.max(0,(drawH-cell.h)/2);
-    cell.ox=Math.max(-maxOX,Math.min(maxOX,cell.ox));
-    cell.oy=Math.max(-maxOY,Math.min(maxOY,cell.oy));
+    clampPan(cell, im);
     g.translate((cell.x+cell.w/2+cell.ox)*c,(cell.y+cell.h/2+cell.oy)*c);
     g.rotate(cell.rot*Math.PI/180);
     g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
@@ -541,10 +561,20 @@ function buildTray(){
   document.getElementById("trayhint").style.display=images.length?"none":"block";
   images.forEach(im=>{
     const d=document.createElement("div"); d.className="thumb"+(selImageId===im.id?" sel":""); d.draggable=true;
-    d.innerHTML=`<img src="${im.img.src}"><div class="dim">${im.w}×${im.h}</div><div class="nm">${im.name}</div>`;
+    d.innerHTML=`<img><div class="dim">${im.w}×${im.h}</div><button class="rm" title="Remove this image from the tray">×</button><div class="nm"></div>`;
+    d.querySelector("img").src=im.img.src;
+    const nm=d.querySelector(".nm"); nm.textContent=im.name; nm.title=im.name;
     d.onclick=()=>{
       if(selCell>=0){ placeImage(selCell,im.id); sync(); drawScreen(); updateReadout(); saveLocal(); }
       else { selImageId=im.id; buildTray(); }
+    };
+    d.querySelector(".rm").onclick=e=>{
+      e.stopPropagation();
+      if(cells.some(c=>c.imgId===im.id) && !confirm(`"${im.name}" is placed in the figure. Remove it and clear those panels?`)) return;
+      images=images.filter(x=>x.id!==im.id);
+      if(selImageId===im.id) selImageId=null;
+      cells.forEach(c=>{ if(c.imgId===im.id) c.imgId=null; });
+      buildTray(); sync(); drawScreen(); updateReadout(); saveLocal();
     };
     d.addEventListener("dragstart",()=>{ dragImageId=im.id; });
     d.addEventListener("dragend",()=>{ dragImageId=null; stage.classList.remove("cell-drop"); });
@@ -701,7 +731,8 @@ function loadProject(o){
   (o.images||[]).forEach(rec=>{ const im=new Image(); im.onload=()=>{
     images.push({id:rec.id,name:rec.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
     imgSeq=Math.max(imgSeq,rec.id); if(--pending===0) finish();
-  }; im.src=rec.src; });
+  }; im.onerror=()=>{ if(--pending===0) finish(); };  // skip undecodable images instead of hanging
+  im.src=rec.src; });
 }
 $("save").onclick=()=>{ const url=URL.createObjectURL(new Blob([projectJSON()],{type:"application/json"})); const a=$("dl"); a.href=url; a.download="figure-project.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000); };
 $("newp").onclick=()=>{

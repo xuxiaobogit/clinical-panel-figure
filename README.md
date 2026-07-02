@@ -10,9 +10,11 @@ It runs entirely in your browser from one HTML file. No install, no server, no u
 Content-Security-Policy baked into the file forbids the page from opening *any* network
 connection, so your images physically cannot leave your computer.
 
-> **Status: v0.2.0.** Adds per-panel free rotation, a show/hide toggle for arrows, and a
-> screen-only alignment grid. A self-contained single HTML file with no dependencies and no
-> backend. MIT-licensed — free to use, fork, and modify.
+> **Status: v0.3.0.** Moves *Load images* into the image tray where the thumbnails live, adds
+> per-image remove (×) from the tray, and makes the cover-fit pan clamp exact at free rotation
+> angles — a panel can no longer show a background gap when you pan a rotated image. A
+> self-contained single HTML file with no dependencies and no backend. MIT-licensed — free to
+> use, fork, and modify.
 
 ## Use it
 
@@ -22,7 +24,8 @@ connection, so your images physically cannot leave your computer.
 
 ## Features
 
-- **Load images** — file picker or drag-drop anywhere. Thumbnails show pixel dimensions.
+- **Load images** — *Load images* button in the image tray, or drag-drop anywhere. Thumbnails
+  show pixel dimensions; **×** removes an image from the tray (and clears any panels using it).
 - **Layouts** — *By level A–I (2·1·2·2·2)*, grids 3×3 / 2×4 / 2×3 / 2×2, row of 2/3, or custom R×C.
 - **Per-panel crop** — drag to pan, wheel/slider to zoom, rotate (90° steps **or any angle** via the
   slider), reset. Cover-fit at any rotation: the panel stays filled, the image is never distorted.
