@@ -2,7 +2,7 @@
 
 A single-file browser tool for preparing multipanel clinical research figures. Images are processed locally, with no remote dependencies or upload feature. It supports panel layout, crop/zoom/rotation, labels, arrows, frames, portable projects, and PNG export at a specified physical width and resolution.
 
-**Version: v0.4.1.** This version makes figure-width changes visible in the editor, alongside the saving, recovery, export validation and DPI auditing improvements in v0.4.0.
+**Version: v0.5.0.** This version adds undo/redo, saved-version recovery, protection against competing browser tabs, per-panel Fit/Fill, custom figure height, and print-unit controls.
 
 ## Open the tool
 
@@ -13,6 +13,15 @@ A single-file browser tool for preparing multipanel clinical research figures. I
 - Use **Save project** to download an editable JSON backup containing the source images and figure settings.
 
 The current release exports **PNG only**, not TIFF, SVG or PDF. It is a figure preparation tool, not a diagnostic image viewer, image-analysis system, or automatic de-identification service.
+
+## What changed in v0.5.0
+
+- Reducing the panel count now asks before removing populated panels. **Undo / Redo** restores layouts, source images, crops, labels, arrows and other figure edits, including **New** and project replacement. Up to 50 edits are available in the current session; keyboard shortcuts are Ctrl/⌘+Z and Ctrl/⌘+Shift+Z. Text and numeric fields retain their native editing shortcuts.
+- Autosave compares persistent revisions in a single database transaction. A stale tab cannot overwrite another tab's newer project. The editor shows the conflict and offers **Save this project** and **Load latest save** so both copies can be preserved.
+- **Saved versions** keeps up to 20 recent recovery points, sampling edits about every 30 seconds and retaining additional points at major layout/image/project changes. **Keep a version** creates an explicit point; **Restore version** first backs up the current figure. Image bytes are deduplicated between recovery points. A 100 MiB soft history budget can trim older points while retaining the newest 10 when that many exist; available browser storage can still limit saves.
+- **Image fit → Fit** shows the whole source at 100% crop zoom, including after rotation; **Fill** retains the former cover-and-crop behavior. Long labels and arrow drawing are confined to their panel, so they cannot spill into a neighboring empty panel in PNG exports.
+- Ordinary wheel/trackpad scrolling moves the figure view. Hold **Alt/Option** while scrolling over a panel to change its crop zoom. Deleting an arrow during a drag no longer raises an error, and file-drop overlays clear when leaving any window edge.
+- **Height** sets the complete figure height independently of width, or **Auto height** restores the layout's natural proportions. Label size is editable in **pt**; gutters, frame width/corners and arrow width are editable in **mm**.
 
 ## What changed in v0.4.1
 
@@ -32,9 +41,11 @@ The current release exports **PNG only**, not TIFF, SVG or PDF. It is a figure p
 
 ## Figure controls
 
-Layouts include the clinical A–I arrangement, 3×3, 2×4, 2×3, 2×2, two/three-panel rows and custom grids. Images use a uniform scale with cover-fit cropping; zoom, free rotation and panning retain panel coverage. Check the crop yourself to ensure the intended ROI remains visible.
+Layouts include the clinical A–I arrangement, 3×3, 2×4, 2×3, 2×2, two/three-panel rows and custom grids. Images use a uniform scale. **Fill** crops to cover a panel; **Fit** shows the whole rotated image at 100% and may leave background visible. Changing Fit/Fill resets crop zoom and pan, while retaining rotation and annotations. Zooming above 100% can crop even in Fit mode. Arrows remain positioned relative to the panel; recheck their targets after changing the image crop, fit or rotation. Check the crop yourself to ensure the intended ROI remains visible.
 
-**Figure width** sets the physical width of the entire exported figure. Height follows the selected layout's proportions. At a fixed **Preview** zoom, changing 174 mm to 85 mm makes the preview narrower and shorter while preserving the arrangement and crops. Changing **Resolution** changes PNG pixel dimensions without changing the preview's physical proportions.
+**Figure width** sets the physical width of the entire exported figure. With **Auto height**, height follows the selected layout's proportions. Set **Height** to 20–1000 mm for a specific overall size or aspect ratio; row heights share the available space proportionally, and image scaling remains uniform. Impossible dimensions, such as a height smaller than margins and gaps, block export. In a page-1 subset, removed rows still collapse and retained rows keep their original heights.
+
+At a fixed **Preview** zoom, changing 174 mm to 85 mm visibly changes the preview. Text, strokes and gutters retain their proportions relative to figure width for compatibility with existing projects; their **pt/mm fields update to show the resulting print sizes**. Set figure width first, then enter the desired typography and spacing. Valid physical inputs apply and autosave immediately; Enter or leaving the field normalizes the display and discards an invalid unfinished entry. Changing **Resolution** changes PNG pixel dimensions without changing physical dimensions or pt/mm values.
 
 Preview 100% uses 96 CSS pixels per inch as a screen reference; actual on-screen millimetres depend on the monitor and browser zoom. **Fit to window** automatically changes the preview magnification to keep the whole figure visible, so different widths can look the same in that mode. Preview zoom affects only the editor view, is not saved in project files, and does not affect PNG output. The selected figure width and resolution are saved and restored with the project.
 
@@ -44,13 +55,19 @@ Labels support upper/lower case, custom text, size, color and an optional backgr
 
 Panels marked **page-2 only** are omitted from **Export page-1 subset**. Entire excluded rows collapse; excluded panels within a retained row leave empty slots. The subset re-letters remaining panels. An entirely excluded figure cannot be exported as a subset.
 
-There is currently no general undo/redo history. Save separate project files before major revisions.
+Session undo history is separate from **Saved versions**: undo is cleared on reload, while saved versions can survive it in the same browser. Neither replaces downloadable project backups.
+
+Saved-version creation and restoration use the browser's secure hashing API, available on the hosted HTTPS page, local files and localhost in supported browsers. If that API is unavailable, these controls explain the limitation and are disabled; current-project autosave, conflict protection and JSON downloads continue to work, and existing recovery points are preserved.
 
 ## Saving and recovery
 
 **Saved in this browser** means the latest autosave transaction completed. Browser data can still be cleared or evicted, private sessions can discard it, and moving the HTML file or using a different browser can change which workspace is available. Keep explicit JSON project backups, especially before an experiment session.
 
-If **Autosave unavailable — use Save project** appears, download a project before closing. The application does not claim it can verify that a browser download was actually retained. **New** replaces the current browser workspace after confirmation; existing downloaded projects are unchanged.
+If **Autosave unavailable — use Save project** appears, download a project before closing. The application does not claim it can verify that a browser download was actually retained. **New** clears images and panel content after confirmation while keeping layout and style settings; it can be undone within the session. Existing downloaded projects are unchanged.
+
+For a newer save in another tab, first download the current tab's project if you want to retain that copy, then use **Load latest save**. Conflict protection also checks the stored project content so an older app tab's changes can be detected by this version; an older app itself cannot provide the new protection. Use v0.5.0 in every editing tab.
+
+Project format v4 stores Fit/Fill and custom height. Existing v1–v3 project files remain readable and retain their original rendering defaults. Newly saved v4 projects require v0.5.0 or newer.
 
 Projects and autosaves contain original image bytes and filenames. They can therefore retain source metadata and identifying information. Treat them with the same care as the source images.
 
@@ -86,9 +103,12 @@ Browser regressions require Node.js, Playwright and an installed Chrome (or set 
 
 ```sh
 node tests/browser.cjs
+node tests/editor.cjs
+node tests/interactions.cjs
+node tests/storage.cjs
 ```
 
-If Playwright is in a shared runtime, set `NODE_PATH` to its `node_modules` directory. The test creates synthetic images in a temporary directory and verifies physical-width preview changes, preview zoom and hit testing, export, metadata replacement, project recovery, large-image autosave, legacy migration, denied storage and error handling. It prints the result directory. It uses isolated browser profiles.
+If Playwright is in a shared runtime, set `NODE_PATH` to its `node_modules` directory. These checks use synthetic images and isolated browser profiles. They cover preview and print dimensions, Fit/Fill, clipping, undo/redo, interaction interruptions, simultaneous tabs, saved-version recovery, exports, metadata replacement, legacy migration, denied storage and error handling. Each script prints its results and temporary artifact directory.
 
 Run the PNG auditor regressions from this directory:
 

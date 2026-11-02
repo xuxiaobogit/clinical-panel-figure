@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cpf-v041-'));
+const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cpf-v050-'));
 const url = pathToFileURL(path.resolve(__dirname, '../figure-builder.html')).href;
 const checks=[];
 function check(name,value){ assert.ok(value,name); checks.push(name); }
@@ -189,16 +189,16 @@ async function stageSize(page){
   const lastPos=await page.evaluate(()=>({x:(cells[8].x+cells[8].w/2)*displayScale,y:(cells[8].y+cells[8].h/2)*displayScale}));
   await page.locator('#stage').click({position:lastPos});await page.locator('#addArrow').click();
   const firstPos=await page.evaluate(()=>{const b=stage.getBoundingClientRect();return {x:b.left+(cells[0].x+cells[0].w/2)*displayScale,y:b.top+(cells[0].y+cells[0].h/2)*displayScale};});
-  await page.mouse.move(firstPos.x,firstPos.y);await page.mouse.wheel(0,-100);
+  await page.mouse.move(firstPos.x,firstPos.y);await page.keyboard.down('Alt');await page.mouse.wheel(0,-100);await page.keyboard.up('Alt');
   await page.waitForFunction(()=>selCell===0);
-  check('Switching panels with the wheel clears stale arrow selection',await page.locator('#arrowW').isDisabled());
+  check('Switching panels with Alt-wheel clears stale arrow selection',await page.locator('#arrowW').isDisabled());
   await page.locator('#lblText').fill('x'.repeat(600));
   check('Label entry cannot exceed the project format limit',await page.locator('#lblText').inputValue().then(v=>v.length===500));
   await page.locator('#lblText').fill('');
   await page.evaluate(()=>{cells[selCell].arrows=Array.from({length:199},()=>({x1:.7,y1:.7,x2:.45,y2:.45,color:'#ff3b30',width:6}));sync();});
   await page.locator('#addArrow').click();
   check('Arrow insertion stops at the project format limit',await page.locator('#addArrow').isDisabled());
-  await page.locator('#preset').selectOption('g24');
+  page.once('dialog',d=>d.accept());await page.locator('#preset').selectOption('g24');
   check('Grid 2 x 4 is two rows and four columns',await page.evaluate(()=>new Set(cells.map(c=>c.y)).size===2&&new Set(cells.map(c=>c.x)).size===4));
   check('Old 2 x 4 projects preserve four-row geometry',await page.evaluate(async()=>{const o=JSON.parse(projectJSON());o.v=2;await loadProject(o);return layoutName==='custom'&&new Set(cells.map(c=>c.y)).size===4&&new Set(cells.map(c=>c.x)).size===2;}));
   const customAnswers=['3','10']; const customHandler=d=>d.accept(customAnswers.shift());page.on('dialog',customHandler);
