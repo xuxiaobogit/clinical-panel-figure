@@ -1,9 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
-<!-- Privacy guarantee, enforced by the browser: this page may not open ANY network
-     connection (connect-src 'none'), load no remote scripts, styles, fonts or images.
-     Images you add are read locally as data: URLs; exports are local blob: downloads.
-     Your images physically cannot leave your computer through this file. -->
+<!-- Local image processing, without remote dependencies or upload code.
+     CSP restricts page connections and resource loads. It does not govern browser
+     extensions, operating-system synchronization, or modified copies of this file. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Clinical Panel Figure Builder — multi-panel figures for journal submission</title>
 <style>
@@ -13,21 +12,26 @@
   button,select,input{ font:inherit; color:var(--txt); }
   button{ background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 10px; cursor:pointer; }
   button:hover{ border-color:#3a4150; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
   button.pri{ background:var(--acc); border-color:var(--acc); color:#fff; }
   button.sm{ padding:4px 7px; border-radius:6px; }
   select,input[type=number],input[type=text]{ background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:5px 7px; }
   input[type=number]{ width:64px; }
   input[type=range]{ width:100%; }
-  .app{ display:grid; grid-template-columns:188px 1fr 256px; grid-template-rows:auto 1fr; height:100%; }
+  .app{ display:grid; grid-template-columns:188px minmax(0,1fr) 256px; grid-template-rows:auto minmax(0,1fr); height:100%; }
   header{ grid-column:1/4; display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); }
-  header .grp{ display:flex; gap:6px; align-items:center; }
+  header .grp{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; min-width:0; }
+  #jpreset{ max-width:100%; }
   header .sep{ width:1px; height:22px; background:var(--line); }
   h1{ font-size:14px; margin:0 8px 0 0; font-weight:600; }
   h1 .ver{ font-size:10px; color:var(--mut); font-weight:400; vertical-align:2px; }
   aside{ background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:10px; }
   aside.right{ border-right:0; border-left:1px solid var(--line); }
-  main{ position:relative; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:18px; }
-  #stage{ background:#000; box-shadow:0 0 0 1px var(--line); }
+  .workspace{ display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .previewbar{ display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); }
+  .previewbar .hint{ flex-basis:100%; }
+  main{ position:relative; flex:1; min-width:0; min-height:0; overflow:auto; display:flex; align-items:flex-start; padding:18px; }
+  #stage{ flex:none; margin:0 auto; background:#000; box-shadow:0 0 0 1px var(--line); }
   .tray{ display:flex; flex-direction:column; gap:8px; }
   .thumb{ border:1px solid var(--line); border-radius:7px; overflow:hidden; cursor:grab; background:#000; position:relative; }
   .thumb img{ width:100%; display:block; max-height:96px; object-fit:contain; background:#000; }
@@ -55,7 +59,7 @@
 
 <div class="app">
   <header>
-    <h1>Clinical Panel Figure Builder <span class="ver">v0.3.0</span></h1>
+    <h1>Clinical Panel Figure Builder <span class="ver">v0.4.1</span></h1>
     <div class="grp"><span class="k">Layout</span>
       <select id="preset">
         <option value="level">By level A–I (2·1·2·2·2)</option>
@@ -72,11 +76,11 @@
     <div class="grp"><span class="k">BG</span><input type="color" id="bg" value="#000000" class="colbtn" style="width:34px;height:26px"></div>
     <div class="grp"><label class="k" style="cursor:pointer" title="Show an alignment grid over the canvas. Screen aid only — it is never drawn into exported PNGs."><input type="checkbox" id="grid"> grid</label></div>
     <div class="sep"></div>
-    <div class="grp"><span class="k">Out</span>
-      <input type="number" id="wmm" value="174" min="20" max="500" step="1"> mm
-      <span class="dpipre"><button class="sm" data-mm="85" title="single column">85</button><button class="sm" data-mm="114" title="1.5 column">114</button><button class="sm" data-mm="174" title="double column">174</button></span>
-      <span class="k">×</span>
-      <input type="number" id="dpi" value="600" min="72" max="2400" step="50"> dpi
+    <div class="grp"><label class="k" for="wmm">Figure width</label>
+      <input type="number" id="wmm" value="174" min="20" max="500" step="1" title="Width of the entire figure. Height follows the layout proportions."> mm
+      <span class="dpipre"><button class="sm" data-mm="85" title="85 mm figure width — single journal column">85 · 1 col</button><button class="sm" data-mm="114" title="114 mm figure width — 1.5 journal columns">114 · 1.5 col</button><button class="sm" data-mm="174" title="174 mm figure width — two journal columns">174 · 2 col</button></span>
+      <label class="k" for="dpi">Resolution</label>
+      <input type="number" id="dpi" value="600" min="72" max="2400" step="50" title="PNG resolution. Changing DPI does not change the figure's physical size."> dpi
       <span class="dpipre"><button class="sm" data-dpi="300">300</button><button class="sm" data-dpi="600">600</button><button class="sm" data-dpi="1200">1200</button></span>
       <select id="jpreset" title="Common publisher figure standards (width × resolution). These are typical conventions — always confirm the exact numbers in your target journal's author guidelines.">
         <option value="">preset…</option>
@@ -95,6 +99,8 @@
     <div class="grp"><span class="pill" id="outInfo" title="">—</span></div>
     <div class="sep"></div>
     <div class="grp"><button id="newp">New</button><button id="save">Save project</button><button id="loadp">Open project</button><input type="file" id="pfile" accept=".json" hidden></div>
+    <div class="grp"><span id="saveStatus" class="pill" role="status" aria-live="polite">Opening local workspace…</span></div>
+    <div id="actionStatus" class="hint" role="status" aria-live="polite"></div>
   </header>
 
   <aside class="left">
@@ -105,7 +111,24 @@
     <div class="tray" id="tray"></div>
   </aside>
 
-  <main id="main"><canvas id="stage"></canvas></main>
+  <section class="workspace" aria-label="Figure preview">
+    <div class="previewbar">
+      <label class="k" for="previewZoom">Preview</label>
+      <select id="previewZoom" title="100% uses 96 screen pixels per inch; on-screen millimetres depend on your monitor and browser zoom. This setting does not affect export.">
+        <option value="50">50%</option>
+        <option value="75">75%</option>
+        <option value="100" selected>100%</option>
+        <option value="125">125%</option>
+        <option value="150">150%</option>
+        <option value="200">200%</option>
+        <option value="fit">Fit to window</option>
+      </select>
+      <span id="pageSize" class="pill" aria-live="polite"></span>
+      <span id="previewInfo" class="k"></span>
+      <div id="previewHint" class="hint">Fixed zoom shows figure width changes. Column presets set figure width; Layout sets panel rows and columns.</div>
+    </div>
+    <main id="main"><canvas id="stage"></canvas></main>
+  </section>
 
   <aside class="right">
     <div class="card">
@@ -146,7 +169,7 @@
           <button class="sm" id="cellBdColorClear" title="use global frame color">use global</button>
         </div>
         <div class="row"><label><input type="checkbox" id="page2"> page-2 only (hidden in page-1 subset)</label></div>
-        <div class="row"><span class="k">label</span><input type="text" id="lblText" placeholder="(auto letter)" style="width:150px"></div>
+        <div class="row"><span class="k">label</span><input type="text" id="lblText" maxlength="500" placeholder="(auto letter)" style="width:150px"></div>
       </div>
     </div>
 
@@ -173,7 +196,7 @@
     <div class="card">
       <details>
         <summary class="lbl" style="margin-top:0; cursor:pointer; display:list-item; list-style-position:inside;">De-identification checklist</summary>
-        <div class="hint" style="margin:6px 0">This tool uploads nothing and burns nothing extra in — but it also can't scrub identifiers already inside your source images. Confirm each before submitting:</div>
+        <div class="hint" style="margin:6px 0">Reminder only: this checklist does not block export or remove identifiers. Images are processed locally. Saved projects include the original images and filenames; keep them in an appropriate location. Check before submitting:</div>
         <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>No patient name, MRN, or dates visible in the image pixels</span></label>
         <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>Faces / identifiable features removed, or written consent on file</span></label>
         <label class="row" style="align-items:flex-start; flex-wrap:nowrap"><input type="checkbox"><span>DICOM / scanner burned-in annotations &amp; overlays removed</span></label>
@@ -191,18 +214,26 @@
 <script>
 "use strict";
 const LOGICAL_W = 1000, UNIT = 300, MARGIN = 18;
+const SCREEN_PX_PER_INCH = 96;
+const MAX_EXPORT_SIDE = 16384, MAX_EXPORT_PIXELS = 100000000;
+const MAX_PREVIEW_SIDE = 8192, MAX_PREVIEW_PIXELS = 16000000;
 const PRESETS = {
   level:{ rows:[ {rh:1,cells:[1,1]}, {rh:.8,cells:[1]}, {rh:1,cells:[1,1]}, {rh:1,cells:[1,1]}, {rh:1,cells:[1,1]} ] },
   g33:{ rows:Array.from({length:3},()=>({rh:1,cells:[1,1,1]})) },
-  g24:{ rows:Array.from({length:4},()=>({rh:1,cells:[1,1]})) },
+  g24:{ rows:Array.from({length:2},()=>({rh:1,cells:[1,1,1,1]})) },
   g23:{ rows:Array.from({length:2},()=>({rh:1,cells:[1,1,1]})) },
   g22:{ rows:Array.from({length:2},()=>({rh:1,cells:[1,1]})) },
   r2:{ rows:[{rh:1,cells:[1,1]}] },
   r3:{ rows:[{rh:1,cells:[1,1,1]}] },
 };
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function panelLetter(i){
+  let text="";
+  for(i++;i>0;i=Math.floor((i-1)/26)) text=String.fromCharCode(65+(i-1)%26)+text;
+  return text;
+}
 
 let images = [];           // {id,name,img,w,h}
+let exportBusy=false, ioBusy=false;
 let imgSeq = 0;
 let cells = [];            // persistent per-panel data
 let layoutName = "level";
@@ -216,6 +247,7 @@ let selImageId = null;
 
 const stage = document.getElementById("stage"), ctx = stage.getContext("2d");
 let geom = null, displayScale = 1;
+let previewWidthMm = 174;  // Keep the last valid preview while an output field is being edited.
 let customDef = { rows:[{rh:1,cells:[1,1]},{rh:1,cells:[1,1]}] };
 
 /* ---------- layout geometry ---------- */
@@ -263,7 +295,7 @@ function subsetGeom(){
       const w=avail*rc.row.cells[c]/sum;
       const ci=rc.arr[c]; const orig=cells[ci];
       const cell={...orig,x,y,w,h};
-      if(!orig.page2){ list.push({cell,letter:LETTERS[lc++]}); }
+      if(!orig.page2){ list.push({cell,letter:panelLetter(lc++)}); }
       else { list.push({cell:{...cell,imgId:null,arrows:[],labelText:" ",bd:"off"},letter:""}); }
       x+=w+gutter;
     }
@@ -383,7 +415,7 @@ function paint(g, c, opts){
   opts = opts || {};
   const include = opts.includePage2!==false;
   let drawCells, W, H;
-  if(include){ drawCells = cells.map((cell,i)=>({cell,letter:LETTERS[i]})); W=geom.W; H=geom.H; }
+  if(include){ drawCells = cells.map((cell,i)=>({cell,letter:panelLetter(i)})); W=geom.W; H=geom.H; }
   else { const s=subsetGeom(); drawCells=s.list; W=s.geom.W; H=s.geom.H; }
   g.fillStyle=bgColor; g.fillRect(0,0,W*c,H*c);
   for(const {cell,letter} of drawCells){
@@ -405,7 +437,7 @@ function paint(g, c, opts){
 
 function drawScreen(){
   const c=displayScale;
-  stage.width=Math.round(geom.W*c); stage.height=Math.round(geom.H*c);
+  stage.width=Math.max(1,Math.floor(geom.W*c)); stage.height=Math.max(1,Math.floor(geom.H*c));
   paint(ctx, c, {screen:true, includePage2:true});
   drawGrid(ctx, c);
 }
@@ -428,9 +460,24 @@ function drawGrid(g, c){
   g.restore();
 }
 function resizeStage(){
+  if(!geom) return;
   const main=document.getElementById("main");
-  const availW=main.clientWidth-36, availH=main.clientHeight-36;
-  displayScale=Math.min(availW/geom.W, availH/geom.H, 1.2);
+  const wmm=+$("wmm").value, validWidth=Number.isFinite(wmm)&&wmm>=20&&wmm<=500;
+  if(validWidth) previewWidthMm=wmm;
+  const baseScale=previewWidthMm/25.4*SCREEN_PX_PER_INCH/geom.W;
+  const zoom=$("previewZoom").value, fit=zoom==="fit";
+  const availW=Math.max(1,main.clientWidth-36), availH=Math.max(1,main.clientHeight-36);
+  const requestedScale=fit?Math.min(availW/geom.W,availH/geom.H):baseScale*(+zoom/100);
+  const maxScale=Math.min(MAX_PREVIEW_SIDE/geom.W,MAX_PREVIEW_SIDE/geom.H,Math.sqrt(MAX_PREVIEW_PIXELS/(geom.W*geom.H)));
+  displayScale=Math.min(requestedScale,maxScale);
+  const limited=displayScale<requestedScale;
+  const heightMm=Math.round(previewWidthMm*geom.H/geom.W*10)/10;
+  $("pageSize").textContent=`${previewWidthMm} × ${heightMm} mm`;
+  $("pageSize").classList.toggle("warn",!validWidth);
+  $("pageSize").title=validWidth?"Complete figure size. Height follows the layout proportions.":"Preview retains the last valid width. Enter a width of 20–500 mm to export.";
+  const actualZoom=Math.round(displayScale/baseScale*1000)/10;
+  $("previewInfo").textContent=limited?`Limited to ${actualZoom}% (requested ${fit?"Fit":zoom+"%"})`:fit?`Fit · ${actualZoom}%`:`${zoom}% · screen reference`;
+  $("previewHint").textContent=limited?"Preview zoom reduced for this large figure. Choose a lower zoom or Fit; export settings are unchanged.":fit?"Fit keeps the whole figure visible, so width changes may look the same. Choose a fixed zoom to compare sizes.":"Fixed zoom shows figure width changes. Column presets set figure width; Layout sets panel rows and columns.";
 }
 function render(){
   buildLayout();
@@ -442,7 +489,10 @@ function render(){
 
 /* ---------- DPI / output transparency ---------- */
 function outputInfo(){
-  const wmm=Math.max(1,+$("wmm").value||174), dpi=Math.max(1,+$("dpi").value||600);
+  const wmm=+$("wmm").value, dpi=+$("dpi").value;
+  if(!Number.isFinite(wmm)||wmm<20||wmm>500||!Number.isFinite(dpi)||dpi<72||dpi>2400){
+    return {error:"Enter a width of 20–500 mm and a resolution of 72–2400 dpi."};
+  }
   const pxW=Math.round(wmm/25.4*dpi);
   const cOut=pxW/LOGICAL_W;
   const fullH=geom?geom.H:0;
@@ -460,11 +510,15 @@ function outputInfo(){
 function updateReadout(){
   if(!geom) return;
   const i=outputInfo(), el=$("outInfo");
+  for(const [id,full] of [["expFull",true],["expQuiz",false]]){
+    const error=exportSizeError(i,full); $(id).disabled=exportBusy||!!error; $(id).title=error||(exportBusy?"Export in progress":"Download PNG");
+  }
+  if(i.error){ el.textContent=i.error; el.title=i.error; el.className="pill warn"; return; }
   let txt=`${i.pxW.toLocaleString()} × ${i.pxH.toLocaleString()} px · ${i.wmm} × ${Math.round(i.physH)} mm`;
   el.classList.remove("warn","ok");
   if(i.minEff!=null){
     txt+=` · src ≈ ${Math.round(i.minEff)} dpi`;
-    if(i.minEff < i.dpi*0.9){ el.classList.add("warn");
+    if(i.minEff < i.dpi){ el.classList.add("warn");
       el.title=`Lowest-resolution placed image renders at ~${Math.round(i.minEff)} dpi — below the ${i.dpi} dpi target. The figure file is genuinely ${i.dpi} dpi, but that image is being upscaled, so its detail will look soft. Use a higher-resolution source or a smaller panel.`;
     } else { el.classList.add("ok");
       el.title=`All placed images meet or exceed the ${i.dpi} dpi target. Figure is ${i.pxW}×${i.pxH} px = ${i.wmm}×${Math.round(i.physH)} mm at ${i.dpi} dpi.`;
@@ -473,6 +527,17 @@ function updateReadout(){
     el.title=`Figure will export at ${i.pxW}×${i.pxH} px = ${i.wmm}×${Math.round(i.physH)} mm, with ${i.dpi} dpi embedded in the PNG.`;
   }
   el.textContent=txt;
+  const error=exportSizeError(i,true);
+  if(error){ el.classList.add("warn"); el.textContent+=" · full export too large"; el.title=error; }
+}
+
+function exportSizeError(info,includePage2){
+  if(info.error) return info.error;
+  if(!includePage2 && !cells.some(c=>!c.page2)) return "No panels remain in the page-1 subset.";
+  const h=Math.round((includePage2?geom.H:subsetGeom().geom.H)*info.pxW/LOGICAL_W);
+  if(info.pxW>MAX_EXPORT_SIDE||h>MAX_EXPORT_SIDE||info.pxW*h>MAX_EXPORT_PIXELS)
+    return "Export exceeds 16,384 pixels per side or 100 megapixels. Reduce width, DPI, or the number of rows.";
+  return null;
 }
 
 /* ---------- hit testing & interaction ---------- */
@@ -525,7 +590,7 @@ window.addEventListener("mouseup",()=>{ if(drag){ drag=null; saveLocal(); } });
 stage.addEventListener("wheel",ev=>{
   const p=canvasToLogical(ev); const ci=cellAt(p);
   if(ci<0) return; ev.preventDefault();
-  if(ci!==selCell){ selCell=ci; sync(); }
+  if(ci!==selCell){ selCell=ci; selArrow=-1; sync(); }
   const cell=cells[ci];
   cell.zoom=Math.max(1,Math.min(5,cell.zoom*(ev.deltaY<0?1.08:0.926)));
   document.getElementById("zoom").value=Math.round(cell.zoom*100);
@@ -545,15 +610,37 @@ stage.addEventListener("drop",ev=>{
 
 /* ---------- images ---------- */
 function placeImage(ci,imgId){ const c=cells[ci]; c.imgId=imgId; c.ox=0; c.oy=0; c.zoom=1; c.rot=0; }
-function addFiles(files){
-  [...files].filter(f=>f.type.startsWith("image/")).forEach(f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{ const im=new Image(); im.onload=()=>{
-      images.push({id:++imgSeq,name:f.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
-      buildTray(); saveLocal();
-    }; im.src=rd.result; };
-    rd.readAsDataURL(f);
+function readDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const rd=new FileReader(); rd.onload=()=>resolve(rd.result);
+    rd.onerror=()=>reject(new Error("Could not read "+file.name)); rd.readAsDataURL(file);
   });
+}
+function decodeImage(src){
+  return new Promise((resolve,reject)=>{
+    const im=new Image(); im.onload=()=>resolve(im);
+    im.onerror=()=>reject(new Error("Unsupported or damaged image")); im.src=src;
+  });
+}
+async function addFiles(files){
+  if(ioBusy) return;
+  const selected=[...files]; if(!selected.length) return;
+  if(images.length+selected.length>200){ alert("A project supports up to 200 images. Remove unused images first."); return; }
+  ioBusy=true;
+  document.querySelector(".app").inert=true;
+  $("actionStatus").textContent="Loading images…";
+  const failures=[];
+  try{
+    for(const f of selected){
+      try{
+        if(!f.type.startsWith("image/")) throw new Error("Not an image");
+        const src=await readDataURL(f), im=await decodeImage(src);
+        images.push({id:++imgSeq,name:f.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
+      }catch(e){ failures.push(f.name); }
+    }
+    buildTray(); saveLocal();
+    $("actionStatus").textContent=failures.length?"Could not load: "+failures.join(", "):"Images loaded. Save a project file to keep a portable backup.";
+  }finally{ $("file").value=""; ioBusy=false; document.querySelector(".app").inert=false; }
 }
 let dragImageId=null;
 function buildTray(){
@@ -585,10 +672,14 @@ function buildTray(){
 /* ---------- right panel sync ---------- */
 function sync(){
   const has=selCell>=0;
+  if(!has || !cells[selCell].arrows[selArrow]) selArrow=-1;
+  $("delArrow").disabled=selArrow<0; $("arrowW").disabled=selArrow<0;
+  $("addArrow").disabled=!has||cells[selCell].arrows.length>=200;
+  if(selArrow>=0) $("arrowW").value=cells[selCell].arrows[selArrow].width;
   document.getElementById("cellHint").style.display=has?"none":"block";
   document.getElementById("cellBody").style.display=has?"block":"none";
   document.getElementById("arrowCard").style.display=has?"block":"none";
-  document.getElementById("cellTag").textContent=has?LETTERS[selCell]:"—";
+  document.getElementById("cellTag").textContent=has?panelLetter(selCell):"—";
   if(has){
     const cell=cells[selCell];
     const im=imgById(cell.imgId);
@@ -607,10 +698,20 @@ function sync(){
 const $=id=>document.getElementById(id);
 $("load").onclick=()=>$("file").click();
 $("file").onchange=e=>addFiles(e.target.files);
-$("preset").onchange=e=>{ layoutName=e.target.value; if(layoutName==="custom"){
-  const r=parseInt(prompt("Rows:","3")||"3"), col=parseInt(prompt("Columns:","3")||"3");
-  customDef={rows:Array.from({length:Math.max(1,r)},()=>({rh:1,cells:Array.from({length:Math.max(1,col)},()=>1)}))};
-} selCell=-1; render(); sync(); };
+$("preset").onchange=e=>{
+  const next=e.target.value;
+  if(next==="custom"){
+    const rText=prompt("Rows (1–10):","3");
+    const colText=rText===null?null:prompt("Columns (1–10):","3");
+    const r=Number(rText), col=Number(colText);
+    if(rText===null||colText===null){ e.target.value=layoutName; return; }
+    if(!Number.isInteger(r)||!Number.isInteger(col)||r<1||r>10||col<1||col>10){
+      alert("Use whole numbers from 1 to 10 for rows and columns."); e.target.value=layoutName; return;
+    }
+    customDef={rows:Array.from({length:r},()=>({rh:1,cells:Array(col).fill(1)}))};
+  }
+  layoutName=next; selCell=-1; selArrow=-1; render(); sync();
+};
 $("gutter").oninput=e=>{ gutter=+e.target.value; render(); };
 $("bg").oninput=e=>{ bgColor=e.target.value; drawScreen(); saveLocal(); };
 $("grid").onchange=e=>{ gridShow=e.target.checked; drawScreen(); saveLocal(); };
@@ -637,13 +738,13 @@ $("rotR").onclick=()=>{ if(selCell<0)return; setRot(cells[selCell].rot+90, true)
 $("rotF").oninput=e=>{ setRot(+e.target.value, false); };
 $("clearImg").onclick=()=>{ if(selCell<0)return; cells[selCell].imgId=null; sync(); drawScreen(); updateReadout(); saveLocal(); };
 $("resetT").onclick=()=>{ if(selCell<0)return; Object.assign(cells[selCell],{zoom:1,ox:0,oy:0,rot:0}); $("zoom").value=100; $("rotF").value=0; $("rotV").textContent="0°"; drawScreen(); updateReadout(); saveLocal(); };
-$("page2").onchange=e=>{ if(selCell<0)return; cells[selCell].page2=e.target.checked; drawScreen(); saveLocal(); };
+$("page2").onchange=e=>{ if(selCell<0)return; cells[selCell].page2=e.target.checked; drawScreen(); updateReadout(); saveLocal(); };
 $("lblText").oninput=e=>{ if(selCell<0)return; cells[selCell].labelText=e.target.value; drawScreen(); saveLocal(); };
 $("cellBd").onchange=e=>{ if(selCell<0)return; cells[selCell].bd=e.target.value; drawScreen(); saveLocal(); };
 $("cellBdColor").oninput=e=>{ if(selCell<0)return; cells[selCell].bdColor=e.target.value; drawScreen(); saveLocal(); };
 $("cellBdColorClear").onclick=()=>{ if(selCell<0)return; cells[selCell].bdColor=null; $("cellBdColor").value=frameOpts.color; drawScreen(); saveLocal(); };
-$("addArrow").onclick=()=>{ if(selCell<0)return; if(!arrowsShow){ arrowsShow=true; $("arrowsShow").checked=true; } cells[selCell].arrows.push({x1:.7,y1:.7,x2:.45,y2:.45,color:arrowColor,width:6}); selArrow=cells[selCell].arrows.length-1; drawScreen(); saveLocal(); };
-$("delArrow").onclick=()=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; drawScreen(); saveLocal(); };
+$("addArrow").onclick=()=>{ if(selCell<0||cells[selCell].arrows.length>=200)return; if(!arrowsShow){ arrowsShow=true; $("arrowsShow").checked=true; } cells[selCell].arrows.push({x1:.7,y1:.7,x2:.45,y2:.45,color:arrowColor,width:6}); selArrow=cells[selCell].arrows.length-1; sync(); drawScreen(); saveLocal(); };
+$("delArrow").onclick=()=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; sync(); drawScreen(); saveLocal(); };
 $("arrowW").oninput=e=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows[selArrow].width=+e.target.value; drawScreen(); saveLocal(); };
 document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
   document.querySelectorAll("#arrowColors .swatch").forEach(x=>x.classList.remove("sel")); s.classList.add("sel");
@@ -651,7 +752,8 @@ document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
 });
 $("arrowCustom").oninput=e=>{ arrowColor=e.target.value; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); } };
 $("arrowsShow").onchange=e=>{ arrowsShow=e.target.checked; drawScreen(); saveLocal(); };
-function onOutChange(){ updateReadout(); saveLocal(); }
+function onOutChange(){ resizeStage(); drawScreen(); updateReadout(); saveLocal(); }
+$("previewZoom").onchange=()=>{ resizeStage(); drawScreen(); };
 $("wmm").oninput=onOutChange;
 $("dpi").oninput=onOutChange;
 document.querySelectorAll("[data-dpi]").forEach(b=>b.onclick=()=>{ $("dpi").value=b.dataset.dpi; onOutChange(); });
@@ -660,27 +762,38 @@ $("jpreset").onchange=e=>{ const v=e.target.value; if(!v){ return; } const [w,d]
 
 /* ---------- export (PNG with correct DPI via pHYs) ---------- */
 function renderOffscreen(includePage2){
-  const {pxW}=outputInfo();
+  const info=outputInfo(), error=exportSizeError(info,includePage2);
+  if(error) throw new Error(error);
+  const {pxW}=info;
   const c=pxW/LOGICAL_W;
   let H=geom.H; if(!includePage2) H=subsetGeom().geom.H;
   const off=document.createElement("canvas");
   off.width=pxW; off.height=Math.round(H*c);
-  paint(off.getContext("2d"), c, {includePage2, screen:false});
+  const g=off.getContext("2d");
+  if(!g) throw new Error("Not enough memory to render this figure. Reduce the output size.");
+  paint(g, c, {includePage2, screen:false});
   return off;
 }
-function exportPNG(includePage2){
-  const dpi=Math.max(1,+$("dpi").value||600);
-  const off=renderOffscreen(includePage2);
-  const tag=includePage2?"complete":"page1";
-  const fname=`Figure-${tag}-${dpi}dpi.png`;
-  off.toBlob(blob=>{
-    blob.arrayBuffer().then(buf=>{
-      const out=withPhys(new Uint8Array(buf),dpi);
-      const url=URL.createObjectURL(new Blob([out],{type:"image/png"}));
-      const a=$("dl"); a.href=url; a.download=fname; a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),5000);
-    });
-  },"image/png");
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob), a=$("dl");
+  a.href=url; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+async function exportPNG(includePage2){
+  if(exportBusy) return;
+  exportBusy=true;
+  let off;
+  try{
+    const dpi=outputInfo().dpi;
+    off=renderOffscreen(includePage2);
+    $("expFull").disabled=true; $("expQuiz").disabled=true;
+    $("actionStatus").textContent="Rendering PNG…";
+    const blob=await new Promise((resolve,reject)=>off.toBlob(b=>b?resolve(b):reject(new Error("PNG export failed. Reduce the output size and try again.")),"image/png"));
+    const out=withPhys(new Uint8Array(await blob.arrayBuffer()),dpi);
+    const fname=`Figure-${includePage2?"complete":"page1"}-${dpi}dpi.png`;
+    downloadBlob(new Blob([out],{type:"image/png"}),fname);
+    $("actionStatus").textContent="Download started: "+fname+". Check the saved file before submission.";
+  }catch(e){ $("actionStatus").textContent="Export failed: "+e.message; }
+  finally{ if(off){ off.width=0; off.height=0; } exportBusy=false; updateReadout(); }
 }
 $("expFull").onclick=()=>exportPNG(true);
 $("expQuiz").onclick=()=>exportPNG(false);
@@ -696,56 +809,176 @@ function withPhys(png,dpi){
   const chunk=new Uint8Array(4+4+9+4); const cv=new DataView(chunk.buffer);
   cv.setUint32(0,9); chunk.set(type,4); chunk.set(data,8);
   const crc=crc32(new Uint8Array([...type,...data])); cv.setUint32(17,crc);
-  // insert immediately after IHDR: signature(8) + IHDR chunk(25) = 33
-  const out=new Uint8Array(png.length+chunk.length);
-  out.set(png.slice(0,33),0); out.set(chunk,33); out.set(png.slice(33),33+chunk.length);
+  // Replace all existing pHYs chunks. Browsers may supply their own 96 dpi tag.
+  const signature=[137,80,78,71,13,10,26,10];
+  if(!signature.every((b,i)=>png[i]===b)) throw new Error("Invalid PNG signature");
+  const parts=[png.slice(0,8)]; let pos=8, inserted=false, ended=false;
+  const view=new DataView(png.buffer,png.byteOffset,png.byteLength);
+  while(pos+12<=png.length){
+    const len=view.getUint32(pos), end=pos+12+len;
+    if(end>png.length) throw new Error("Truncated PNG chunk");
+    const kind=String.fromCharCode(...png.slice(pos+4,pos+8));
+    if(pos===8 && (kind!=="IHDR"||len!==13)) throw new Error("Invalid PNG header");
+    if(kind!=="pHYs") parts.push(png.slice(pos,end));
+    if(kind==="IHDR" && !inserted){ parts.push(chunk); inserted=true; }
+    pos=end; if(kind==="IEND"){ ended=true; break; }
+  }
+  if(!inserted||!ended||pos!==png.length) throw new Error("Incomplete PNG");
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let at=0; for(const part of parts){ out.set(part,at); at+=part.length; }
   return out;
 }
 
 /* ---------- project save/load (self-contained JSON) ---------- */
 function projectJSON(){
   return JSON.stringify({
-    v:2, layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, arrowsShow, gridShow, wmm:+$("wmm").value, dpi:+$("dpi").value,
+    v:3, appVersion:"0.4.1", layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, arrowsShow, gridShow, wmm:+$("wmm").value, dpi:+$("dpi").value,
     images: images.map(im=>({id:im.id,name:im.name,src:im.img.src})),
     cells: cells.map(c=>({imgId:c.imgId,zoom:c.zoom,ox:c.ox,oy:c.oy,rot:c.rot,page2:c.page2,labelText:c.labelText,bd:c.bd,bdColor:c.bdColor,arrows:c.arrows}))
   });
 }
-function loadProject(o){
-  layoutName=o.layoutName||"level"; customDef=o.customDef||customDef; gutter=o.gutter??10; bgColor=o.bgColor||"#000000";
-  labelOpts=Object.assign({show:true,upper:true,chip:false,size:34,color:"#ffffff"},o.labelOpts||{});
-  frameOpts=Object.assign({show:false,color:"#ffffff",width:3,radius:0},o.frameOpts||{});
-  arrowsShow = o.arrowsShow!==false; gridShow = !!o.gridShow;
-  $("preset").value=PRESETS[layoutName]?layoutName:(layoutName==="custom"?"custom":"level");
-  $("gutter").value=gutter; $("bg").value=bgColor; $("wmm").value=o.wmm||174; $("dpi").value=o.dpi||600;
+function validateProject(input){
+  if(!input||typeof input!=="object"||Array.isArray(input)) throw new Error("Project must be a JSON object.");
+  const o=JSON.parse(JSON.stringify(input));
+  if(o.v!=null && ![1,2,3].includes(o.v)) throw new Error("Unsupported project version.");
+  const number=(x,def,lo,hi)=>{
+    if(x==null) return def;
+    if(typeof x!=="number"||!Number.isFinite(x)||x<lo||x>hi) throw new Error("Project contains an invalid numeric setting.");
+    return x;
+  };
+  const bool=(x,def)=>{ if(x==null)return def; if(typeof x!=="boolean")throw new Error("Invalid checkbox setting.");return x; };
+  const color=(x,def)=>{ if(x==null)return def; if(!/^#[0-9a-f]{6}$/i.test(x))throw new Error("Invalid color.");return x; };
+  let name=o.layoutName||"level", custom=o.customDef||{rows:[{rh:1,cells:[1,1]},{rh:1,cells:[1,1]}]};
+  if(name!=="custom"&&!Object.hasOwn(PRESETS,name)) throw new Error("Unknown layout.");
+  // v0.3 and earlier called a four-row layout '2 x 4'. Preserve its geometry.
+  if((o.v||1)<3 && name==="g24"){ name="custom"; custom={rows:Array.from({length:4},()=>({rh:1,cells:[1,1]}))}; }
+  if(!Array.isArray(custom.rows)||custom.rows.length<1||custom.rows.length>10) throw new Error("Layouts support 1–10 rows.");
+  custom={rows:custom.rows.map(row=>{
+    if(!row||!Array.isArray(row.cells)||row.cells.length<1||row.cells.length>10) throw new Error("Layouts support 1–10 columns.");
+    return {rh:number(row.rh,1,.1,10),cells:row.cells.map(w=>number(w,1,.01,100))};
+  })};
+  const recs=o.images||[]; if(!Array.isArray(recs)||recs.length>200) throw new Error("A project supports up to 200 images.");
+  const ids=new Set();
+  const cleanImages=recs.map(rec=>{
+    if(!rec||!Number.isInteger(rec.id)||rec.id<1||ids.has(rec.id)) throw new Error("Invalid or duplicate image ID.");
+    if(typeof rec.name!=="string"||typeof rec.src!=="string"||!/^data:image\//i.test(rec.src)) throw new Error("Project images must be embedded image data.");
+    ids.add(rec.id); return {id:rec.id,name:rec.name,src:rec.src};
+  });
+  const count=(name==="custom"?custom:PRESETS[name]).rows.reduce((n,r)=>n+r.cells.length,0);
+  if(!Array.isArray(o.cells)||o.cells.length!==count) throw new Error("Panel count does not match the layout.");
+  const cleanCells=o.cells.map(c=>{
+    if(!c||typeof c!=="object") throw new Error("Invalid panel.");
+    if(c.imgId!=null&&!ids.has(c.imgId)) throw new Error("A panel refers to a missing image.");
+    if(c.labelText!=null && (typeof c.labelText!=="string"||c.labelText.length>500)) throw new Error("Invalid panel label.");
+    if(c.bd!=null && !["inherit","on","off"].includes(c.bd)) throw new Error("Invalid border setting.");
+    if(c.arrows!=null && (!Array.isArray(c.arrows)||c.arrows.length>200)) throw new Error("Too many arrows.");
+    return {imgId:c.imgId??null,zoom:number(c.zoom,1,1,5),ox:number(c.ox,0,-1e7,1e7),oy:number(c.oy,0,-1e7,1e7),rot:number(c.rot,0,-36000,36000),
+      page2:bool(c.page2,false),labelText:c.labelText||"",bd:c.bd||"inherit",bdColor:color(c.bdColor,null),
+      arrows:(c.arrows||[]).map(a=>({x1:number(a.x1,.7,0,1),y1:number(a.y1,.7,0,1),x2:number(a.x2,.45,0,1),y2:number(a.y2,.45,0,1),width:number(a.width,6,2,16),color:color(a.color,"#ff3b30")}))};
+  });
+  const l=o.labelOpts||{}, f=o.frameOpts||{};
+  return {v:3,layoutName:name,customDef:custom,gutter:number(o.gutter,10,0,40),bgColor:color(o.bgColor,"#000000"),
+    labelOpts:{show:bool(l.show,true),upper:bool(l.upper,true),chip:bool(l.chip,false),size:number(l.size,34,12,60),color:color(l.color,"#ffffff")},
+    frameOpts:{show:bool(f.show,false),color:color(f.color,"#ffffff"),width:number(f.width,3,0,14),radius:number(f.radius,0,0,40)},
+    // Preserve unfinished numeric edits in project backups; outputInfo prevents
+    // exporting them. A temporarily invalid width must never lose the images.
+    arrowsShow:bool(o.arrowsShow,true),gridShow:bool(o.gridShow,false),wmm:number(o.wmm,174,-Number.MAX_VALUE,Number.MAX_VALUE),dpi:number(o.dpi,600,-Number.MAX_VALUE,Number.MAX_VALUE),images:cleanImages,cells:cleanCells};
+}
+async function loadProject(input){
+  const o=validateProject(input);
+  // Decode everything before replacing the current work; errors preserve the open project.
+  const decoded=[];
+  for(const rec of o.images){
+    let im; try{ im=await decodeImage(rec.src); }catch(e){ throw new Error("Cannot decode project image: "+rec.name); }
+    decoded.push({id:rec.id,name:rec.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
+  }
+  layoutName=o.layoutName; customDef=o.customDef; gutter=o.gutter; bgColor=o.bgColor;
+  labelOpts=o.labelOpts; frameOpts=o.frameOpts; arrowsShow=o.arrowsShow; gridShow=o.gridShow;
+  images=decoded; imgSeq=Math.max(0,...images.map(im=>im.id));
+  cells=o.cells; selCell=-1; selArrow=-1; selImageId=null; drag=null;
+  $("preset").value=layoutName;
+  $("gutter").value=gutter; $("bg").value=bgColor; $("wmm").value=o.wmm; $("dpi").value=o.dpi;
   $("lblShow").checked=labelOpts.show; $("lblUpper").checked=labelOpts.upper; $("lblChip").checked=labelOpts.chip;
   $("lblSize").value=labelOpts.size; $("lblColor").value=labelOpts.color;
   $("frShow").checked=frameOpts.show; $("frColor").value=frameOpts.color; $("frWidth").value=frameOpts.width; $("frRadius").value=frameOpts.radius;
   $("arrowsShow").checked=arrowsShow; $("grid").checked=gridShow;
-  imgSeq=0; images=[];
-  let pending=(o.images||[]).length;
-  const finish=()=>{ buildTray(); buildLayout();
-    (o.cells||[]).forEach((cd,i)=>{ if(cells[i]) Object.assign(cells[i],cd); });
-    render(); sync();
-  };
-  if(!pending){ finish(); return; }
-  (o.images||[]).forEach(rec=>{ const im=new Image(); im.onload=()=>{
-    images.push({id:rec.id,name:rec.name,img:im,w:im.naturalWidth,h:im.naturalHeight});
-    imgSeq=Math.max(imgSeq,rec.id); if(--pending===0) finish();
-  }; im.onerror=()=>{ if(--pending===0) finish(); };  // skip undecodable images instead of hanging
-  im.src=rec.src; });
+  buildTray(); render(); sync();
 }
-$("save").onclick=()=>{ const url=URL.createObjectURL(new Blob([projectJSON()],{type:"application/json"})); const a=$("dl"); a.href=url; a.download="figure-project.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000); };
+$("save").onclick=()=>{
+  downloadBlob(new Blob([projectJSON()],{type:"application/json"}),"figure-project.json");
+  $("actionStatus").textContent="Project download started. Keep this file as a backup; it includes source images and filenames.";
+};
 $("newp").onclick=()=>{
-  if(!confirm("Start a new, empty figure? This clears the images and layout currently in this browser. (Your exported images and any saved .json project files are NOT affected.)")) return;
+  if(!confirm("Start a new, empty figure? This clears the images and layout currently in this browser. Saved project files and exported figures are not changed.")) return;
   images=[]; imgSeq=0; selImageId=null; selCell=-1; selArrow=-1; cells=[];
   arrowsShow=true; gridShow=false; $("arrowsShow").checked=true; $("grid").checked=false;
-  try{ localStorage.removeItem("figure-builder-v2"); localStorage.removeItem("icm-figure-builder-v1"); }catch(e){}
+  document.querySelectorAll("details input").forEach(el=>el.checked=false);
   buildTray(); render(); sync();
 };
+async function openProjectFile(f){
+  if(!f||ioBusy) return;
+  if(images.length && !confirm("Replace the current figure with this project? Save the current project first if you need a separate copy.")) return;
+  ioBusy=true;
+  document.querySelector(".app").inert=true;
+  $("actionStatus").textContent="Opening project…";
+  try{ await loadProject(JSON.parse(await f.text())); $("actionStatus").textContent="Project opened."; }
+  catch(err){ alert("Project was not opened: "+err.message); }
+  finally{ $("pfile").value=""; ioBusy=false; document.querySelector(".app").inert=false; }
+}
 $("loadp").onclick=()=>$("pfile").click();
-$("pfile").onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ loadProject(JSON.parse(rd.result)); }catch(err){ alert("Bad project file: "+err); } }; rd.readAsText(f); };
+$("pfile").onchange=e=>openProjectFile(e.target.files[0]);
 
-function saveLocal(){ try{ localStorage.setItem("figure-builder-v2", projectJSON()); }catch(e){} }
+/* ---------- autosave (IndexedDB; visible failures, ordered writes) ---------- */
+let initializing=true, saveRevision=0, storedRevision=0, saveTimer=null, saveQueue=Promise.resolve(), dbPromise=null;
+function saveStatus(text,kind=""){
+  $("saveStatus").textContent=text; $("saveStatus").className="pill "+kind;
+}
+function openStore(){
+  if(!dbPromise) dbPromise=new Promise((resolve,reject)=>{
+    let request;
+    try{ request=indexedDB.open("clinical-panel-figure",1); }catch(e){ reject(e); return; }
+    const timeout=setTimeout(()=>reject(new Error("Local storage did not respond")),4000);
+    request.onupgradeneeded=()=>request.result.createObjectStore("projects");
+    request.onerror=()=>{ clearTimeout(timeout); reject(request.error); };
+    request.onblocked=()=>{ clearTimeout(timeout); reject(new Error("Local storage is blocked by another tab")); };
+    request.onsuccess=()=>{ clearTimeout(timeout); resolve(request.result); };
+  });
+  return dbPromise;
+}
+async function storeAccess(value,write=false){
+  const db=await openStore();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction("projects",write?"readwrite":"readonly"), store=tx.objectStore("projects");
+    const request=write?store.put(value,"current"):store.get("current");
+    tx.oncomplete=()=>resolve(request.result);
+    tx.onerror=()=>reject(tx.error||new Error("Local save failed"));
+    tx.onabort=()=>reject(tx.error||new Error("Local save aborted"));
+  });
+}
+function saveLocal(){
+  if(initializing) return;
+  saveRevision++; saveStatus("Saving locally…");
+  clearTimeout(saveTimer); saveTimer=setTimeout(flushLocal,180);
+}
+function flushLocal(){
+  clearTimeout(saveTimer); saveTimer=null;
+  const revision=saveRevision, payload=projectJSON();
+  saveQueue=saveQueue.catch(()=>{}).then(async()=>{
+    try{
+      await storeAccess(payload,true); storedRevision=revision;
+      // Only remove legacy storage after a successful replacement has committed.
+      try{ localStorage.removeItem("figure-builder-v2"); localStorage.removeItem("icm-figure-builder-v1"); }catch(e){}
+      if(revision===saveRevision) saveStatus("Saved in this browser", "ok");
+    }catch(e){
+      if(revision===saveRevision) saveStatus("Autosave unavailable — use Save project", "warn");
+    }
+  });
+  return saveQueue;
+}
+window.addEventListener("beforeunload",e=>{
+  if((ioBusy&&!initializing)||saveRevision>storedRevision){ e.preventDefault(); e.returnValue=""; }
+});
+document.addEventListener("visibilitychange",()=>{ if(document.hidden&&saveTimer) flushLocal(); });
 
 /* ---------- drag & drop (files / project) ---------- */
 const drop=$("drop");
@@ -754,18 +987,32 @@ const drop=$("drop");
 window.addEventListener("drop",e=>{
   if(dragImageId!=null) return; // handled by the canvas thumbnail drop
   e.preventDefault(); drop.style.display="none";
+  if(ioBusy) return;
   const fs=[...e.dataTransfer.files]; const proj=fs.find(f=>f.name.endsWith(".json"));
-  if(proj){ const rd=new FileReader(); rd.onload=()=>{ try{ loadProject(JSON.parse(rd.result)); }catch(err){ alert(err); } }; rd.readAsText(proj); }
+  if(proj){ openProjectFile(proj); }
   else addFiles(fs);
 });
 
-window.addEventListener("resize",()=>{ resizeStage(); drawScreen(); });
-window.addEventListener("keydown",e=>{ if((e.key==="Delete"||e.key==="Backspace")&&selCell>=0&&selArrow>=0&&document.activeElement.tagName!=="INPUT"){ cells[selCell].arrows.splice(selArrow,1); selArrow=-1; drawScreen(); saveLocal(); } });
+// Observe the workspace itself: toolbar wrapping can resize it without a window resize.
+new ResizeObserver(()=>{ if(geom){ resizeStage(); drawScreen(); } }).observe($("main"));
+window.addEventListener("keydown",e=>{ if((e.key==="Delete"||e.key==="Backspace")&&selCell>=0&&selArrow>=0&&document.activeElement.tagName!=="INPUT"){ e.preventDefault(); cells[selCell].arrows.splice(selArrow,1); selArrow=-1; sync(); drawScreen(); saveLocal(); } });
 
 /* ---------- boot ---------- */
-(function boot(){
-  const saved=localStorage.getItem("figure-builder-v2") || localStorage.getItem("icm-figure-builder-v1");
-  if(saved){ try{ loadProject(JSON.parse(saved)); return; }catch(e){} }
-  render(); sync();
+(async function boot(){
+  ioBusy=true;
+  document.querySelector(".app").inert=true;
+  let saved=null, storageError=false, restoreError=false;
+  try{ saved=await storeAccess(); }catch(e){ storageError=true; }
+  if(!saved){
+    try{ saved=localStorage.getItem("figure-builder-v2")||localStorage.getItem("icm-figure-builder-v1"); }
+    catch(e){ storageError=true; }
+  }
+  try{ if(saved) await loadProject(JSON.parse(saved)); else { render(); sync(); } }
+  catch(e){ restoreError=true; cells=[]; images=[]; render(); sync(); saveStatus("Could not restore autosave — open a saved project", "warn"); }
+  finally{ initializing=false; ioBusy=false; document.querySelector(".app").inert=false; }
+  if(restoreError) return; // Preserve the stored copy until the next intentional edit.
+  if(storageError) saveStatus("Autosave unavailable — use Save project", "warn");
+  else if(saved) saveLocal(); // Migrate legacy data only after successful restore.
+  else saveStatus("Local workspace ready — save a project backup");
 })();
 </script>

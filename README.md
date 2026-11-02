@@ -1,98 +1,102 @@
 # Clinical Panel Figure Builder
 
-A **local-first, privacy-preserving, DPI-audited** single-file tool for assembling **multi-panel
-figures for biomedical publication** — especially clinical/medical composites where several
-sub-images (ultrasound, CT, MRI, MRCP, endoscopy, intra-op photos, etc.) are tiled into one
-labelled figure. Grid layout, per-panel crop/zoom/rotate, customizable panel frames, burned-in
-letter labels, colored arrows, and a **print-ready PNG export with honest, verifiable DPI**.
+A single-file browser tool for preparing multipanel clinical research figures. Images are processed locally, with no remote dependencies or upload feature. It supports panel layout, crop/zoom/rotation, labels, arrows, frames, portable projects, and PNG export at a specified physical width and resolution.
 
-It runs entirely in your browser from one HTML file. No install, no server, no upload — and a
-Content-Security-Policy baked into the file forbids the page from opening *any* network
-connection, so your images physically cannot leave your computer.
+**Version: v0.4.1.** This version makes figure-width changes visible in the editor, alongside the saving, recovery, export validation and DPI auditing improvements in v0.4.0.
 
-> **Status: v0.3.0.** Moves *Load images* into the image tray where the thumbnails live, adds
-> per-image remove (×) from the tray, and makes the cover-fit pan clamp exact at free rotation
-> angles — a panel can no longer show a background gap when you pan a rotated image. A
-> self-contained single HTML file with no dependencies and no backend. MIT-licensed — free to
-> use, fork, and modify.
+## Open the tool
 
-## Use it
+- Download or copy `figure-builder.html` and open it in a desktop browser.
+- Existing online deployment: [Clinical Panel Figure](https://xuxiaobogit.github.io/clinical-panel-figure/).
+- Use **Load images**, select a panel, then click a thumbnail; dragging a thumbnail onto a panel also works.
+- Adjust the figure, choose width and DPI, and select **Export complete**.
+- Use **Save project** to download an editable JSON backup containing the source images and figure settings.
 
-- **Online:** https://xuxiaobogit.github.io/clinical-panel-figure/
-- **Offline:** download **`figure-builder.html`** and double-click it. Works fully offline; your
-  images stay on your computer.
+The current release exports **PNG only**, not TIFF, SVG or PDF. It is a figure preparation tool, not a diagnostic image viewer, image-analysis system, or automatic de-identification service.
 
-## Features
+## What changed in v0.4.1
 
-- **Load images** — *Load images* button in the image tray, or drag-drop anywhere. Thumbnails
-  show pixel dimensions; **×** removes an image from the tray (and clears any panels using it).
-- **Layouts** — *By level A–I (2·1·2·2·2)*, grids 3×3 / 2×4 / 2×3 / 2×2, row of 2/3, or custom R×C.
-- **Per-panel crop** — drag to pan, wheel/slider to zoom, rotate (90° steps **or any angle** via the
-  slider), reset. Cover-fit at any rotation: the panel stays filled, the image is never distorted.
-- **Place images two ways** — drag a thumbnail straight onto a panel, or select a panel then click a thumbnail.
-- **Panel frames** — global border style (color · width · corner radius) applied to all panels, with a
-  **per-panel override**: turn a panel's border on/off or give it its own color. Width and corner are in
-  figure units, so they scale correctly with the export.
-- **Labels** — auto A–I (upper/lower case, size, color, optional chip background) + per-panel text override.
-- **Arrows** — add, drag endpoints, recolor, width, and a one-click **show/hide** for all arrows so you
-  can export a clean, annotation-free version of the same figure. Set your own color legend for the figure.
-- **Alignment grid** — toggle a grid + center-cross overlay to line panels, labels and arrows up by eye.
-  It is a screen-only guide and is **never** drawn into the exported PNG.
-- **Publisher presets** — one click sets width × DPI to common journal conventions (single column
-  85 mm / 1.5 column 114 mm / double column 174 mm, at 300 / 600 / 1200 dpi). Always confirm the
-  exact numbers in your target journal's author guidelines.
-- **De-identification checklist** — a built-in pre-export reminder of the identifiers this tool
-  *cannot* scrub for you (names/MRN/dates burned into pixels, faces, DICOM overlays, embedded metadata).
-- **Gutter** and **background** color.
-- **Two-page export** — flag panels as *page-2 only* → *Export page-1 subset* drops those rows and
-  re-letters, while *Export complete* renders everything.
-- **Export** — width (mm) × DPI → PNG, with a correct **pHYs** chunk so the file genuinely reports the
-  chosen DPI. Quick presets for column width (85 / 114 / 174 mm) and DPI (300 / 600 / 1200).
-- **Live output readout** — shows exact output pixels, physical size (mm), and the **effective DPI of your
-  lowest-resolution placed image**. Turns amber when that image is being upscaled, so you know *before*
-  submitting whether a panel will look soft.
-- **Save / Open project** — self-contained JSON (images + all transforms/frames/arrows), plus autosave so
-  you don't lose work on refresh. The **New** button clears it to start fresh.
+- Figure width now changes the preview size at the default fixed 100% zoom. Previously, the preview always fitted the window, hiding the difference between 85 mm and 174 mm even though PNG export used the selected width correctly.
+- A separate **Preview** zoom offers 50–200% and **Fit to window**, with the complete figure's physical width and height shown beside it. Large previews scroll without squeezing or clipping the canvas's left edge.
+- Width presets identify single- and double-column figure widths. They do not change the number of panels; use **Layout** for panel rows and columns.
 
-## Privacy
+## What changed in v0.4.0
 
-Your images never leave your machine, and that is enforced two independent ways:
+- Autosave uses IndexedDB to accommodate image projects that exceed the former localStorage quota. The header displays saving, saved, or failure status; pending or failed saves trigger a warning when leaving. Old browser saves migrate after a successful write. If browser storage is blocked, the editor and manual project downloads still work.
+- Project loading validates the full project and decodes all images before replacing the current figure. Damaged projects leave the current work intact. Imported image order is stable, and unsupported files are reported.
+- Export checks physical width, DPI, and canvas size before allocation, handles PNG encoding failures, and replaces existing PNG pHYs metadata instead of creating duplicate resolution tags.
+- Grid labels consistently mean rows × columns. **2 × 4** now has two rows; old project files retain their original four-row geometry on import.
+- Automatic panel labels continue from Z to AA, AB, and so on. Custom layouts support 1–10 rows and 1–10 columns. Up to 200 source images can be loaded in one project.
+- Effective-source-resolution warnings now cover every value below the chosen target; values at 90% of the target are no longer described as meeting it.
+- The independent PNG auditor rejects missing/invalid absolute resolution, inconsistent axes, duplicate metadata, corrupt or incomplete image streams, and handles normal metadata quantization.
 
-- **No network code.** The file contains no `fetch` / `XMLHttpRequest`, and loads no remote scripts,
-  styles, fonts, or images. Images you add are read locally as `data:` URLs; exports are local
-  `blob:` downloads.
-- **Browser-enforced.** A `Content-Security-Policy` meta tag sets `connect-src 'none'` (with
-  `default-src 'none'`), so even a *modified* copy of the file cannot open a connection — the
-  browser blocks it outright.
+## Figure controls
 
-The tool cannot, however, remove identifiers already *inside* your source images. The in-app
-**de-identification checklist** lists what you remain responsible for.
+Layouts include the clinical A–I arrangement, 3×3, 2×4, 2×3, 2×2, two/three-panel rows and custom grids. Images use a uniform scale with cover-fit cropping; zoom, free rotation and panning retain panel coverage. Check the crop yourself to ensure the intended ROI remains visible.
 
-## About the DPI (is it real?) — and how to check it yourself
+**Figure width** sets the physical width of the entire exported figure. Height follows the selected layout's proportions. At a fixed **Preview** zoom, changing 174 mm to 85 mm makes the preview narrower and shorter while preserving the arrangement and crops. Changing **Resolution** changes PNG pixel dimensions without changing the preview's physical proportions.
 
-Yes. Two independent things are both correct:
+Preview 100% uses 96 CSS pixels per inch as a screen reference; actual on-screen millimetres depend on the monitor and browser zoom. **Fit to window** automatically changes the preview magnification to keep the whole figure visible, so different widths can look the same in that mode. Preview zoom affects only the editor view, is not saved in project files, and does not affect PNG output. The selected figure width and resolution are saved and restored with the project.
 
-1. **The file is actually that many pixels.** `pixels = width_mm / 25.4 × DPI`. At 174 mm × 600 dpi the
-   canvas is rendered at a true **4110 px** wide — labels, arrows and geometry are vector-drawn at the
-   target size, not upscaled from the screen preview.
-2. **The embedded DPI tag matches.** The PNG `pHYs` chunk stores pixels-per-metre = `DPI / 0.0254`
-   (600 dpi → 23 622 ppm). Photoshop / journal systems read this and report exactly 600 dpi at 174 mm.
+For very large or tall figures, the preview reduces its magnification to stay within 8,192 pixels per side and 16 megapixels, and displays the resulting zoom. This preview limit does not change the figure's export settings.
 
-**Don't take my word for it — audit any exported PNG** with the included script (Python 3, standard
-library only, no dependencies):
+Labels support upper/lower case, custom text, size, color and an optional background. Arrows have draggable endpoints, color and width. Frames have global settings and per-panel overrides. The alignment grid is a screen guide and is excluded from PNG export.
+
+Panels marked **page-2 only** are omitted from **Export page-1 subset**. Entire excluded rows collapse; excluded panels within a retained row leave empty slots. The subset re-letters remaining panels. An entirely excluded figure cannot be exported as a subset.
+
+There is currently no general undo/redo history. Save separate project files before major revisions.
+
+## Saving and recovery
+
+**Saved in this browser** means the latest autosave transaction completed. Browser data can still be cleared or evicted, private sessions can discard it, and moving the HTML file or using a different browser can change which workspace is available. Keep explicit JSON project backups, especially before an experiment session.
+
+If **Autosave unavailable — use Save project** appears, download a project before closing. The application does not claim it can verify that a browser download was actually retained. **New** replaces the current browser workspace after confirmation; existing downloaded projects are unchanged.
+
+Projects and autosaves contain original image bytes and filenames. They can therefore retain source metadata and identifying information. Treat them with the same care as the source images.
+
+## Export resolution
+
+Output width is `round(width_mm / 25.4 × dpi)` pixels. At 174 mm and 600 dpi, the PNG is 4110 pixels wide. Geometry, text and arrows render at the output size. PNG pHYs stores an integer pixels-per-metre value: 600 dpi is represented by 23622 ppm, or 599.9988 dpi. That tiny difference is normal quantization.
+
+The interface supports widths of 20–500 mm and resolutions of 72–2400 dpi, subject to a combined export limit of **16,384 pixels per side and 100 megapixels**. Reduce DPI, width or row count if a figure exceeds those limits. These limits avoid excessive allocation; they do not guarantee every device has enough memory for the largest supported export.
+
+The `src ≈ N dpi` readout estimates the sampling density of the lowest-resolution placed source after crop, rotation and zoom at the final width. A large 600-dpi canvas does not restore detail to a low-resolution source. Source images can also already have been upscaled or compressed before import. Check source provenance and output quality independently.
+
+Publisher presets are convenient dimensions, not verified compliance with every journal. Confirm the target journal's current requirements.
+
+## Audit an exported PNG
+
+Python 3, standard library only:
 
 ```sh
 python validate_dpi.py Figure-complete-600dpi.png --width-mm 174 --expect-dpi 600
 ```
 
-It decodes the raw PNG bytes and reports the true pixel size (from IHDR), the embedded resolution
-(from pHYs) converted to DPI, the physical size those imply, and whether the metadata CRC is valid —
-then verifies the round trip `pixels == round(width_mm / 25.4 × dpi)`. Exit code `0` means the file
-is self-consistent; `1` flags any mismatch.
+The audit checks PNG structure, checksums and supported pixel-stream structure, resolution units and both axes, and the relationship between physical width and pixel width. Exit code 0 indicates these checks passed. It does not evaluate ROI retention, clinical information, source-image detail, image manipulation, or all possible publication requirements. Also open the image in an independent image viewer before submission.
 
-The one thing DPI metadata *can't* fix: a low-resolution **source image** stretched across a large panel.
-The figure is still 600 dpi, but that image's real detail isn't. The readout's *"src ≈ N dpi"* value
-exposes exactly this — if it's amber, swap in a higher-resolution source or make the panel smaller.
+## Local processing and privacy
+
+The current HTML contains no upload code and no remotely loaded scripts, fonts or styles. A Content Security Policy restricts page connections and resource loads. In the tested local workflow, no page HTTP(S) requests were observed.
+
+These application-level controls do not govern browser extensions, operating-system synchronization, where downloads are stored, or modified copies of the software. The de-identification checklist is a **reminder**, not an export gate and not an automatic identifier detector. It does not remove names, dates, faces or annotations already embedded in image pixels.
+
+## Development checks
+
+Browser regressions require Node.js, Playwright and an installed Chrome (or set `CHROME_BIN` to an executable):
+
+```sh
+node tests/browser.cjs
+```
+
+If Playwright is in a shared runtime, set `NODE_PATH` to its `node_modules` directory. The test creates synthetic images in a temporary directory and verifies physical-width preview changes, preview zoom and hit testing, export, metadata replacement, project recovery, large-image autosave, legacy migration, denied storage and error handling. It prints the result directory. It uses isolated browser profiles.
+
+Run the PNG auditor regressions from this directory:
+
+```sh
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+Browser checks establish behavior only in the tested browser/OS; repeat on the environments used in the study. System fonts and browser rendering may differ across machines.
 
 ## License
 

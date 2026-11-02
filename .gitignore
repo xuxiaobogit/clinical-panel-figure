@@ -14,3 +14,7 @@ desktop.ini
 *.jpg
 *.jpeg
 figure-project*.json
+
+# Python test artifacts
+__pycache__/
+*.py[cod]
