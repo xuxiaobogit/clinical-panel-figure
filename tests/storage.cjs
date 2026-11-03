@@ -29,6 +29,32 @@ async function download(page, selector, name) {
       return canvas.toDataURL().split(',')[1];
     });
     const fixture = name => ({ name, mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    // App inertness does not suppress window-level keyboard shortcuts. Simulate
+    // a slow image decode and send real keys while the editor is unavailable.
+    const busyContext = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+    const busy = await open(busyContext); await busy.locator('#previewZoom').selectOption('fit');
+    const panelPosition = await busy.evaluate(() => ({ x: (cells[0].x + cells[0].w / 2) * displayScale, y: (cells[0].y + cells[0].h / 2) * displayScale }));
+    await busy.locator('#stage').click({ position: panelPosition }); await busy.locator('#addArrow').click(); await saved(busy);
+    const beforeImport = await busy.evaluate(() => projectJSON());
+    await busy.evaluate(() => {
+      const original = decodeImage;
+      decodeImage = src => new Promise((resolve, reject) => {
+        window.releaseImport = () => { decodeImage = original; original(src).then(resolve, reject); };
+      });
+    });
+    await busy.locator('#file').setInputFiles(fixture('slow-import.png'));
+    await busy.waitForFunction(() => ioBusy && document.querySelector('.app').inert && !!window.releaseImport);
+    let unchangedDuringImport = true;
+    for (const key of ['Delete', 'Backspace', 'ControlOrMeta+z', 'ControlOrMeta+Shift+z', 'ControlOrMeta+y']) {
+      await busy.keyboard.press(key);
+      unchangedDuringImport &&= await busy.evaluate(expected => projectJSON() === expected, beforeImport);
+    }
+    check('Delete, Backspace, Undo and Redo cannot mutate an editor busy importing images', unchangedDuringImport);
+    await busy.evaluate(() => window.releaseImport()); await busy.waitForFunction(() => !ioBusy && images.length === 1); await saved(busy);
+    check('A delayed import finishes without losing the selected annotation', await busy.evaluate(() => cells[0].arrows.length === 1));
+    await busy.keyboard.press('Delete');
+    check('The annotation delete shortcut resumes after the import completes', await busy.evaluate(() => cells[0].arrows.length === 0));
+    await busyContext.close();
     await a.locator('#file').setInputFiles(fixture('base.png')); await saved(a);
     const firstRevision = await a.evaluate(() => storeBaseRevision);
     const b = await open(context); await saved(b);

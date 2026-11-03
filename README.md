@@ -2,7 +2,7 @@
 
 A single-file browser tool for preparing multipanel clinical research figures. Images are processed locally, with no remote dependencies or upload feature. It supports panel layout, crop/zoom/rotation, labels, arrows, frames, portable projects, and PNG export at a specified physical width and resolution.
 
-**Version: v0.5.0.** This version adds undo/redo, saved-version recovery, protection against competing browser tabs, per-panel Fit/Fill, custom figure height, and print-unit controls.
+**Version: v0.5.1.** This version fixes crop drift while entering dimensions, groups continuous edits into usable undo steps, and improves image replacement and arrow selection.
 
 ## Open the tool
 
@@ -13,6 +13,14 @@ A single-file browser tool for preparing multipanel clinical research figures. I
 - Use **Save project** to download an editable JSON backup containing the source images and figure settings.
 
 The current release exports **PNG only**, not TIFF, SVG or PDF. It is a figure preparation tool, not a diagnostic image viewer, image-analysis system, or automatic de-identification service.
+
+## What changed in v0.5.1
+
+- A continuous text or numeric edit, slider drag, or Alt/Option-wheel gesture uses one **Undo** step. Long labels no longer consume all 50 available edits. Valid inputs still update the preview and autosave immediately; leaving a field or pressing Enter starts a new editing step.
+- Retyping figure dimensions no longer permanently shifts the crop through intermediate numbers. Each preview during the edit starts from the crop at the beginning of that editing session.
+- Clicking the same image again preserves its crop and rotation. Replacing an image with arrows asks before removing those arrows; cancelling keeps the panel intact. Clearing a panel image or removing its source also clears associated arrows. Labels and frame settings remain, and Undo can restore the removed image and arrows.
+- Overlapping arrow endpoints favor the selected arrow, then the most recently added arrow. The palette and custom color now follow the selected arrow.
+- Delete/Backspace cannot remove annotations while images or projects are loading or a saved version is being restored.
 
 ## What changed in v0.5.0
 
@@ -65,7 +73,7 @@ Saved-version creation and restoration use the browser's secure hashing API, ava
 
 If **Autosave unavailable — use Save project** appears, download a project before closing. The application does not claim it can verify that a browser download was actually retained. **New** clears images and panel content after confirmation while keeping layout and style settings; it can be undone within the session. Existing downloaded projects are unchanged.
 
-For a newer save in another tab, first download the current tab's project if you want to retain that copy, then use **Load latest save**. Conflict protection also checks the stored project content so an older app tab's changes can be detected by this version; an older app itself cannot provide the new protection. Use v0.5.0 in every editing tab.
+For a newer save in another tab, first download the current tab's project if you want to retain that copy, then use **Load latest save**. Conflict protection also checks the stored project content so an older app tab's changes can be detected by this version; an older app itself cannot provide the new protection. Use the current version in every editing tab.
 
 Project format v4 stores Fit/Fill and custom height. Existing v1–v3 project files remain readable and retain their original rendering defaults. Newly saved v4 projects require v0.5.0 or newer.
 
@@ -105,10 +113,11 @@ Browser regressions require Node.js, Playwright and an installed Chrome (or set 
 node tests/browser.cjs
 node tests/editor.cjs
 node tests/interactions.cjs
+node tests/history.cjs
 node tests/storage.cjs
 ```
 
-If Playwright is in a shared runtime, set `NODE_PATH` to its `node_modules` directory. These checks use synthetic images and isolated browser profiles. They cover preview and print dimensions, Fit/Fill, clipping, undo/redo, interaction interruptions, simultaneous tabs, saved-version recovery, exports, metadata replacement, legacy migration, denied storage and error handling. Each script prints its results and temporary artifact directory.
+If Playwright is in a shared runtime, set `NODE_PATH` to its `node_modules` directory. These checks use synthetic images and isolated browser profiles. They cover preview and print dimensions, typed-size crop stability, Fit/Fill, clipping, grouped undo/redo, image replacement, arrow selection, interaction interruptions, simultaneous tabs, saved-version recovery, exports, metadata replacement, legacy migration, denied storage and error handling. Each script prints its results; scripts that save artifacts also print their temporary directory.
 
 Run the PNG auditor regressions from this directory:
 

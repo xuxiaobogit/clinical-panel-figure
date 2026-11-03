@@ -23,6 +23,19 @@ async function selectPanel(page, index) {
  await page.mouse.click(point.x, point.y);
  await page.waitForFunction(i => selCell === i, index);
 }
+async function arrowEndpoint(page, cellIndex, arrowIndex) {
+ return page.evaluate(([ci, ai]) => {
+  const r = stage.getBoundingClientRect(), c = cells[ci], a = c.arrows[ai];
+  return { x: r.left + (c.x + a.x1 * c.w) * displayScale, y: r.top + (c.y + a.y1 * c.h) * displayScale };
+ }, [cellIndex, arrowIndex]);
+}
+async function dropThumbnail(page, imageIndex, cellIndex) {
+ const position = await page.evaluate(i => ({ x: (cells[i].x + cells[i].w / 2) * displayScale, y: (cells[i].y + cells[i].h / 2) * displayScale }), cellIndex);
+ await page.locator('.thumb').nth(imageIndex).dragTo(page.locator('#stage'), { targetPosition: position });
+}
+async function editState(page) {
+ return page.evaluate(() => ({ revision: saveRevision, historyIndex, selCell, selArrow }));
+}
 async function withDialog(page, accept, action) {
  let observed;
  const handler = async dialog => {
@@ -69,10 +82,34 @@ async function withDialog(page, accept, action) {
   }));
 
   await page.locator('#addArrow').click();
-  const endpoint = await page.evaluate(() => {
-   const r = stage.getBoundingClientRect(), c = cells[0], a = c.arrows[0];
-   return { x: r.left + (c.x + a.x1 * c.w) * displayScale, y: r.top + (c.y + a.y1 * c.h) * displayScale };
-  });
+  await page.locator('#addArrow').click(); await page.locator('[data-c="#19d36b"]').click();
+  const originalArrow = await page.evaluate(() => structuredClone(cells[0].arrows[0]));
+  const overlap = await arrowEndpoint(page, 0, 1);
+  await page.mouse.move(overlap.x, overlap.y); await page.mouse.down(); await page.mouse.move(overlap.x - 35, overlap.y - 25); await page.mouse.up();
+  assert.deepEqual(await page.evaluate(() => cells[0].arrows[0]), originalArrow);
+  check('Dragging overlapping handles moves the selected arrow first', await page.evaluate(() => selArrow === 1 && cells[0].arrows[1].x1 !== cells[0].arrows[0].x1));
+  const redEndpoint = await arrowEndpoint(page, 0, 0); await page.mouse.click(redEndpoint.x, redEndpoint.y);
+  check('Selecting an older arrow synchronizes preset and custom color controls', await page.evaluate(() =>
+   selArrow === 0 && document.querySelector('#arrowColors .swatch.sel')?.dataset.c === '#ff3b30' && document.getElementById('arrowCustom').value === '#ff3b30'));
+  await page.locator('[data-c="#ffcc00"]').click();
+  await page.locator('#arrowCustom').evaluate(input => { input.value = '#1177aa'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+  check('Custom arrow colors clear an unrelated preset selection', await page.evaluate(() => cells[0].arrows[0].color === '#1177aa' && !document.querySelector('#arrowColors .swatch.sel')));
+  await page.locator('#undo').click();
+  check('Undo restores the arrow color and both color controls together', await page.evaluate(() =>
+   cells[0].arrows[selArrow].color === '#ffcc00' && document.querySelector('#arrowColors .swatch.sel')?.dataset.c === '#ffcc00' && document.getElementById('arrowCustom').value === '#ffcc00'));
+  const greenEndpoint = await arrowEndpoint(page, 0, 1); await page.mouse.click(greenEndpoint.x, greenEndpoint.y);
+  await page.locator('#arrowsShow').uncheck();
+  await page.mouse.move(greenEndpoint.x, greenEndpoint.y); await page.mouse.down();
+  check('Hidden arrow handles cannot intercept a pan gesture', await page.evaluate(() => drag?.type === 'pan'));
+  await page.mouse.up(); await page.locator('#arrowsShow').check(); await page.locator('#delArrow').click();
+  const edgeStart = await arrowEndpoint(page, 0, 0);
+  const edge = await page.evaluate(() => { const r = stage.getBoundingClientRect(), c = cells[0]; return { x: r.left + (c.x + c.w) * displayScale - 2, y: r.top + (c.y + c.h * .7) * displayScale }; });
+  await page.mouse.move(edgeStart.x, edgeStart.y); await page.mouse.down(); await page.mouse.move(edge.x, edge.y); await page.mouse.up();
+  const neighbour = await page.evaluate(() => { const r = stage.getBoundingClientRect(), c = cells[1]; return { x: r.left + c.x * displayScale + 2, y: r.top + (c.y + c.h * .7) * displayScale }; });
+  await page.mouse.click(neighbour.x, neighbour.y);
+  check('A nearby arrow handle does not steal clicks inside another panel', await page.evaluate(() => selCell === 1));
+  await selectPanel(page, 0);
+  const endpoint = await arrowEndpoint(page, 0, 0);
   await page.mouse.move(endpoint.x, endpoint.y); await page.mouse.down();
   await page.keyboard.press('Delete'); await page.mouse.move(endpoint.x + 20, endpoint.y + 20); await page.mouse.up();
   check('Deleting an arrow during a drag cancels that drag without an exception', errors.length === 0 && await page.evaluate(() => drag === null && cells[0].arrows.length === 0));
@@ -126,6 +163,41 @@ async function withDialog(page, accept, action) {
   assert.equal(complete.cells[8].fit, 'contain'); assert.equal(complete.cells[8].zoom, 1.75);
   assert.equal(complete.cells[8].arrows.length, 1); assert.equal(complete.images.length, 2);
 
+  const beforeRepeat = await editState(editor);
+  const repeatedDialog = await withDialog(editor, false, () => editor.locator('.thumb').first().click());
+  assert.deepEqual(await project(editor), complete); assert.deepEqual(await editState(editor), beforeRepeat);
+  check('Clicking the same source again preserves crop, annotations and history', repeatedDialog === undefined);
+
+  const cancelledReplacement = await withDialog(editor, false, () => editor.locator('.thumb').nth(1).click());
+  assert.deepEqual(await project(editor), complete); assert.deepEqual(await editState(editor), beforeRepeat);
+  check('Cancelling image replacement changes neither the figure nor autosave state', cancelledReplacement?.type === 'confirm' && /arrows/.test(cancelledReplacement.message));
+  await withDialog(editor, true, () => editor.locator('.thumb').nth(1).click());
+  check('Replacing an annotated image clears old arrows and arrow selection', await editor.evaluate(() => cells[8].imgId === images[1].id && !cells[8].arrows.length && selArrow === -1));
+  assert.equal((await project(editor)).cells[8].labelText, complete.cells[8].labelText);
+  assert.equal((await project(editor)).cells[8].bd, complete.cells[8].bd);
+  await editor.locator('#undo').click(); assert.deepEqual(await project(editor), complete);
+  check('Undo after image replacement restores the previous image, crop and arrows', true);
+
+  const beforeDrop = await editState(editor);
+  const cancelledDrop = await withDialog(editor, false, () => dropThumbnail(editor, 1, 8));
+  assert.deepEqual(await project(editor), complete); assert.deepEqual(await editState(editor), beforeDrop);
+  check('Cancelling drag-and-drop replacement does not alter selection or autosave', cancelledDrop?.type === 'confirm');
+  await withDialog(editor, true, () => dropThumbnail(editor, 1, 8));
+  assert.equal(await editor.evaluate(() => cells[8].imgId), complete.images[1].id);
+  assert.equal(await editor.evaluate(() => cells[8].arrows.length), 0);
+  await editor.locator('#undo').click(); assert.deepEqual(await project(editor), complete);
+  check('Drag-and-drop replacement shares annotation cleanup and remains undoable', true);
+
+  const beforeClear = await editState(editor);
+  const cancelledClear = await withDialog(editor, false, () => editor.locator('#clearImg').click());
+  assert.deepEqual(await project(editor), complete); assert.deepEqual(await editState(editor), beforeClear);
+  check('Cancelling Clear image preserves image annotations and history', cancelledClear?.type === 'confirm');
+  await withDialog(editor, true, () => editor.locator('#clearImg').click());
+  check('Clear image removes its arrows and selection but retains the panel label and frame', await editor.evaluate(() =>
+   cells[8].imgId === null && !cells[8].arrows.length && selArrow === -1 && cells[8].labelText === 'Retain panel I' && cells[8].bd === 'on'));
+  await editor.locator('#undo').click(); assert.deepEqual(await project(editor), complete);
+  check('Undo after Clear image restores the image and its annotations', true);
+
   const cancelled = await withDialog(editor, false, () => editor.locator('#preset').selectOption('g22'));
   assert.deepEqual(await project(editor), complete);
   check('Cancelling a smaller layout preserves every panel and setting', cancelled?.type === 'confirm' && await editor.locator('#preset').inputValue() === 'g33');
@@ -176,10 +248,19 @@ async function withDialog(page, accept, action) {
   assert.deepEqual(afterNativeUndo.cells[8].arrows, beforeNativeUndo.cells[8].arrows);
   check('Focused text fields keep native undo instead of triggering figure history', true);
 
-  const beforeImageRemoval = await project(editor);
+  await selectPanel(editor, 0); await editor.locator('.thumb').first().click(); await editor.locator('#addArrow').click();
+  await selectPanel(editor, 1); await editor.locator('.thumb').nth(1).click(); await editor.locator('#addArrow').click();
+  await selectPanel(editor, 8);
+  const restoredEndpoint = await arrowEndpoint(editor, 8, 0); await editor.mouse.click(restoredEndpoint.x, restoredEndpoint.y);
+  const beforeImageRemoval = await project(editor), beforeRemovalState = await editState(editor);
+  const cancelledRemoval = await withDialog(editor, false, () => editor.locator('.thumb .rm').first().click());
+  assert.deepEqual(await project(editor), beforeImageRemoval); assert.deepEqual(await editState(editor), beforeRemovalState);
+  check('Cancelling source-image removal preserves all placements and annotations', cancelledRemoval?.type === 'confirm' && /arrows/.test(cancelledRemoval.message));
   await withDialog(editor, true, () => editor.locator('.thumb .rm').first().click());
   assert.equal(await editor.evaluate(() => images.length), 1);
   assert.equal(await editor.evaluate(() => cells[8].imgId), null);
+  check('Source removal clears arrows on all affected panels and preserves unrelated panels', await editor.evaluate(() =>
+   cells[0].imgId === null && !cells[0].arrows.length && !cells[8].arrows.length && selArrow === -1 && cells[1].imgId === images[0].id && cells[1].arrows.length === 1));
   await editor.locator('#undo').click(); assert.deepEqual(await project(editor), beforeImageRemoval);
   check('Undo restores a deleted source image and every panel using it', true);
 

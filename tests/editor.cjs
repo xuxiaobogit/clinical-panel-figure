@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cpf-editor-v050-'));
+const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cpf-editor-v051-'));
 const url = pathToFileURL(path.resolve(__dirname, '../figure-builder.html')).href;
 const checks = [];
 function check(name, value) { assert.ok(value, name); checks.push(name); }
@@ -211,6 +211,67 @@ function pngSize(filename) {
     check('Importing a zero-size SVG reports failure and preserves all current images and panels',
       await page.evaluate(() => projectJSON()) === beforeInvalidImage &&
       (await page.locator('#actionStatus').textContent()).startsWith('Could not load:'));
+
+    // Real typing passes through temporary widths/heights/gutters. Those previews
+    // must not permanently clamp a crop before the final number has been entered.
+    const geometryContext = await browser.newContext({ viewport: { width: 1500, height: 1000 }, acceptDownloads: true });
+    const geometryPage = await geometryContext.newPage();
+    geometryPage.on('pageerror', e => errors.push(e.message));
+    geometryPage.on('request', r => { if (/^https?:/.test(r.url())) requests.push(r.url()); });
+    await geometryPage.goto(url); await ready(geometryPage);
+    await geometryPage.locator('#hmm').fill('100'); await geometryPage.locator('#dpi').fill('300');
+    await geometryPage.locator('#previewZoom').selectOption('50');
+    const portrait = await geometryPage.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 200; c.height = 800;
+      const g = c.getContext('2d'), gradient = g.createLinearGradient(0, 0, 0, 800);
+      gradient.addColorStop(0, 'red'); gradient.addColorStop(1, 'blue');
+      g.fillStyle = gradient; g.fillRect(0, 0, 200, 800); return c.toDataURL().split(',')[1];
+    });
+    await geometryPage.locator('#file').setInputFiles({ name: 'synthetic-portrait.png', mimeType: 'image/png', buffer: Buffer.from(portrait, 'base64') });
+    await geometryPage.waitForFunction(() => images.length === 1 && !ioBusy);
+    await selectPanel(geometryPage, 0); await geometryPage.locator('.thumb').click();
+    const panToEdge = async () => {
+      const start = await geometryPage.evaluate(() => {
+        const r = stage.getBoundingClientRect(), c = cells[0];
+        return { x: r.left + (c.x + c.w / 2) * displayScale, y: r.top + (c.y + c.h / 2) * displayScale };
+      });
+      await geometryPage.mouse.move(start.x, start.y); await geometryPage.mouse.down();
+      await geometryPage.mouse.move(start.x, start.y + 500, { steps: 8 }); await geometryPage.mouse.up();
+    };
+    const rememberCrop = () => geometryPage.evaluate(() => {
+      window.cropBeforeTyping = { ox: cells[0].ox, oy: cells[0].oy, png: renderOffscreen(true).toDataURL() };
+    });
+    const cropUnchanged = () => geometryPage.evaluate(() =>
+      Math.abs(cells[0].ox - window.cropBeforeTyping.ox) < 1e-7 && Math.abs(cells[0].oy - window.cropBeforeTyping.oy) < 1e-7 &&
+      renderOffscreen(true).toDataURL() === window.cropBeforeTyping.png);
+    for (const [field, value] of [['hmm', '100'], ['wmm', '500'], ['gutterMm', '12.5']]) {
+      await geometryPage.locator('#' + field).fill(value); await geometryPage.locator('#' + field).press('Tab');
+      await panToEdge(); await rememberCrop();
+      await geometryPage.locator('#' + field).click();
+      await geometryPage.locator('#' + field).press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+      await geometryPage.locator('#' + field).pressSequentially(value);
+      check(`Retyping the same ${field} preserves the crop and exact PNG through intermediate digits`, await cropUnchanged());
+      await geometryPage.locator('#' + field).press('Tab');
+    }
+    await panToEdge(); await rememberCrop();
+    await geometryPage.locator('#hmm').fill('400'); await geometryPage.locator('#hmm').fill('100');
+    check('Changing size and changing it back in one edit restores the original crop', await cropUnchanged());
+    await geometryPage.locator('#hmm').press('Tab');
+    await geometryPage.locator('#wmm').fill('85');
+    const focusedDownload = async (selector, filename) => {
+      const pending = geometryPage.waitForEvent('download');
+      await geometryPage.locator(selector).dispatchEvent('click');
+      const item = await pending, destination = path.join(output, filename); await item.saveAs(destination); return destination;
+    };
+    const liveProject = JSON.parse(fs.readFileSync(await focusedDownload('#save', 'size-edit-current.json')));
+    const liveExport = pngSize(await focusedDownload('#expFull', 'size-edit-current.png'));
+    check('Save and export use the current valid size even before the input loses focus',
+      liveProject.wmm === 85 && liveProject.hmm === 100 && liveExport.width === 1004 && liveExport.height === 1181 &&
+      await geometryPage.locator('#wmm').evaluate(input => document.activeElement === input));
+    await geometryPage.locator('#wmm').press('Tab');
+    const committedPan = await geometryPage.evaluate(() => cells[0].oy);
+    await geometryPage.locator('#wmm').fill('500');
+    check('A later size edit starts from the committed crop instead of an older editing session', closeTo(await geometryPage.evaluate(() => cells[0].oy), committedPan));
 
     check('No page JavaScript errors in editor regressions', errors.length === 0);
     check('Editor tests remain entirely offline', requests.length === 0);

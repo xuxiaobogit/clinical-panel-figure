@@ -59,7 +59,7 @@
 
 <div class="app">
   <header>
-    <h1>Clinical Panel Figure Builder <span class="ver">v0.5.0</span></h1>
+    <h1>Clinical Panel Figure Builder <span class="ver">v0.5.1</span></h1>
     <div class="grp"><span class="k">Layout</span>
       <select id="preset">
         <option value="level">By level A–I (2·1·2·2·2)</option>
@@ -77,7 +77,7 @@
     <div class="grp"><label class="k" style="cursor:pointer" title="Show an alignment grid over the canvas. Screen aid only — it is never drawn into exported PNGs."><input type="checkbox" id="grid"> grid</label></div>
     <div class="sep"></div>
     <div class="grp"><label class="k" for="wmm">Figure width</label>
-      <input type="number" id="wmm" value="174" min="20" max="500" step="1" title="Width of the entire figure. Height follows the layout proportions."> mm
+      <input type="number" id="wmm" value="174" min="20" max="500" step="1" title="Width of the entire figure. Height can follow the layout automatically or be set independently."> mm
       <span class="dpipre"><button class="sm" data-mm="85" title="85 mm figure width — single journal column">85 · 1 col</button><button class="sm" data-mm="114" title="114 mm figure width — 1.5 journal columns">114 · 1.5 col</button><button class="sm" data-mm="174" title="174 mm figure width — two journal columns">174 · 2 col</button></span>
       <label class="k" for="hmm">Height</label><input type="number" id="hmm" min="20" max="1000" step="0.1" placeholder="Auto" title="Optional complete figure height, 20–1000 mm. Leave empty for the layout's natural proportions."> mm<button class="sm" id="autoHeight">Auto height</button>
       <label class="k" for="dpi">Resolution</label>
@@ -162,7 +162,7 @@
         <div class="row">
           <button class="sm" id="rotL">⟲ 90°</button>
           <button class="sm" id="rotR">⟳ 90°</button>
-          <button class="sm" id="clearImg">clear</button>
+          <button class="sm" id="clearImg" title="Remove the image and its arrows; keep the panel label and frame.">clear image</button>
           <button class="sm" id="resetT">reset crop</button>
         </div>
         <div class="row"><span class="k" style="width:34px">zoom</span><input type="range" id="zoom" min="100" max="500" value="100"></div>
@@ -520,7 +520,7 @@ function resizeStage(){
   const heightMm=Math.round(previewWidthMm*geom.H/geom.W*10)/10;
   $("pageSize").textContent=`${previewWidthMm} × ${heightMm} mm`;
   $("pageSize").classList.toggle("warn",!validWidth);
-  $("pageSize").title=validWidth?"Complete figure size. Height follows the layout proportions.":"Preview retains the last valid width. Enter a width of 20–500 mm to export.";
+  $("pageSize").title=validWidth?"Complete exported figure dimensions. Height is automatic or independently specified.":"Preview retains the last valid width. Enter a width of 20–500 mm to export.";
   const actualZoom=Math.round(displayScale/baseScale*1000)/10;
   $("previewInfo").textContent=limited?`Limited to ${actualZoom}% (requested ${fit?"Fit":zoom+"%"})`:fit?`Fit · ${actualZoom}%`:`${zoom}% · screen reference`;
   $("previewHint").textContent=limited?"Preview zoom reduced for this large figure. Choose a lower zoom or Fit; export settings are unchanged.":fit?"Fit keeps the whole figure visible, so width changes may look the same. Choose a fixed zoom to compare sizes.":"Fixed zoom shows figure width changes. Column presets set figure width; Layout sets panel rows and columns.";
@@ -602,7 +602,12 @@ function cellAt(p){
 function arrowHandleAt(p){
   if(selCell<0 || !arrowsShow) return null;
   const cell=cells[selCell];
-  for(let ai=0;ai<cell.arrows.length;ai++){
+  // Do not take a click from a neighbouring panel merely because a handle's
+  // screen-sized hit area extends across the gutter.
+  if(!cell||cellAt(p)!==selCell) return null;
+  const order=cell.arrows.map((_,i)=>i).reverse();
+  if(selArrow>=0&&selArrow<cell.arrows.length){ order.splice(order.indexOf(selArrow),1); order.unshift(selArrow); }
+  for(const ai of order){
     const a=cell.arrows[ai];
     for(const end of ["1","2"]){
       const hx=cell.x+a["x"+end]*cell.w, hy=cell.y+a["y"+end]*cell.h;
@@ -664,12 +669,28 @@ stage.addEventListener("drop",ev=>{
   if(dragImageId==null) return;
   ev.preventDefault(); ev.stopPropagation(); stage.classList.remove("cell-drop");
   const ci=cellAt(canvasToLogical(ev));
-  if(ci>=0){ placeImage(ci,dragImageId); selCell=ci; selArrow=-1; sync(); drawScreen(); updateReadout(); saveLocal(); }
+  if(ci>=0&&placeImage(ci,dragImageId)){ selCell=ci; selArrow=-1; sync(); drawScreen(); updateReadout(); saveLocal(); }
   dragImageId=null;
 });
 
 /* ---------- images ---------- */
-function placeImage(ci,imgId){ const c=cells[ci]; c.imgId=imgId; c.ox=0; c.oy=0; c.zoom=1; c.rot=0; }
+function placeImage(ci,imgId){
+  const c=cells[ci];
+  if(!c||!imgById(imgId)||c.imgId===imgId) return false;
+  if(c.arrows.length&&!confirm("Use this image in the panel and remove its existing arrows? The panel label and frame settings will be kept. Undo can restore the previous panel.")) return false;
+  Object.assign(c,{imgId,ox:0,oy:0,zoom:1,rot:0,arrows:[]});
+  if(selCell===ci) selArrow=-1;
+  if(drag?.cell===c) drag=null;
+  return true;
+}
+function clearPanelImage(ci){
+  const c=cells[ci];
+  if(!c||(c.imgId==null&&!c.arrows.length)) return false;
+  c.imgId=null; c.arrows=[];
+  if(selCell===ci) selArrow=-1;
+  if(drag?.cell===c) drag=null;
+  return true;
+}
 function readDataURL(file){
   return new Promise((resolve,reject)=>{
     const rd=new FileReader(); rd.onload=()=>resolve(rd.result);
@@ -712,15 +733,15 @@ function buildTray(){
     d.querySelector("img").src=im.img.src;
     const nm=d.querySelector(".nm"); nm.textContent=im.name; nm.title=im.name;
     d.onclick=()=>{
-      if(selCell>=0){ placeImage(selCell,im.id); sync(); drawScreen(); updateReadout(); saveLocal(); }
+      if(selCell>=0){ if(placeImage(selCell,im.id)){ sync(); drawScreen(); updateReadout(); saveLocal(); } }
       else { selImageId=im.id; buildTray(); }
     };
     d.querySelector(".rm").onclick=e=>{
       e.stopPropagation();
-      if(cells.some(c=>c.imgId===im.id) && !confirm(`"${im.name}" is placed in the figure. Remove it and clear those panels?`)) return;
+      if(cells.some(c=>c.imgId===im.id) && !confirm(`Remove "${im.name}" from the tray and every panel using it, including those panels' arrows? Panel labels and frames will be kept. Undo can restore this change.`)) return;
       images=images.filter(x=>x.id!==im.id);
       if(selImageId===im.id) selImageId=null;
-      cells.forEach(c=>{ if(c.imgId===im.id) c.imgId=null; });
+      cells.forEach((c,i)=>{ if(c.imgId===im.id) clearPanelImage(i); });
       buildTray(); sync(); drawScreen(); updateReadout(); saveLocal();
     };
     d.addEventListener("dragstart",()=>{ dragImageId=im.id; });
@@ -730,6 +751,13 @@ function buildTray(){
 }
 
 /* ---------- right panel sync ---------- */
+function syncArrowColor(){
+  const arrow=selCell>=0?cells[selCell]?.arrows[selArrow]:null;
+  if(arrow) arrowColor=arrow.color;
+  const color=arrowColor.toLowerCase();
+  document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.classList.toggle("sel",s.dataset.c.toLowerCase()===color));
+  $("arrowCustom").value=color;
+}
 function sync(){
   const has=selCell>=0;
   if(!has || !cells[selCell].arrows[selArrow]) selArrow=-1;
@@ -753,13 +781,32 @@ function sync(){
     document.getElementById("cellBd").value=cell.bd||"inherit";
     document.getElementById("cellBdColor").value=cell.bdColor||frameOpts.color;
   }
-  syncPhysicalControls();
+  syncArrowColor(); syncPhysicalControls();
 }
 
 // The internal figure coordinates preserve legacy projects. Physical fields expose
 // their actual print measurements at the selected output width.
 function printWidth(){ const w=+$("wmm").value; return w>=20&&w<=500?w:previewWidthMm; }
 function physicalValue(units,points=false){ return units/LOGICAL_W*printWidth()*(points?72/25.4:1); }
+// A numeric edit can pass through several temporary geometries. Recalculate each
+// preview from the crop at the start of that edit, rather than permanently
+// clamping the crop for every intermediate digit.
+let geometryInputEdit=null;
+function finishGeometryInputEdit(){ geometryInputEdit=null; }
+function beginGeometryInputEdit(input){
+  if(geometryInputEdit?.input===input) return;
+  geometryInputEdit={input,layout:layoutName,images:images.map(im=>im.img),
+    crops:cells.map(c=>({imgId:c.imgId,zoom:c.zoom,rot:c.rot,ox:c.ox,oy:c.oy}))};
+}
+function restoreGeometryInputBaseline(input){
+  const edit=geometryInputEdit;
+  if(edit&&(edit.layout!==layoutName||edit.crops.length!==cells.length||edit.images.length!==images.length||edit.images.some((im,i)=>im!==images[i].img))) finishGeometryInputEdit();
+  beginGeometryInputEdit(input);
+  cells.forEach((cell,i)=>{
+    const crop=geometryInputEdit.crops[i];
+    if(cell.imgId===crop.imgId&&cell.zoom===crop.zoom&&cell.rot===crop.rot){ cell.ox=crop.ox; cell.oy=crop.oy; }
+  });
+}
 function syncPhysicalControls(force=false){
   const show=(id,units,lo,hi,points=false)=>{
     const field=$(id);
@@ -817,7 +864,7 @@ $("preset").onchange=e=>{
   customDef=nextCustom;
   layoutName=next; selCell=-1; selArrow=-1; render(); sync();
 };
-$("gutter").oninput=e=>{ gutter=+e.target.value; render(); };
+$("gutter").oninput=e=>{ restoreGeometryInputBaseline(e.target); gutter=+e.target.value; render(); };
 $("bg").oninput=e=>{ bgColor=e.target.value; drawScreen(); saveLocal(); };
 $("grid").onchange=e=>{ gridShow=e.target.checked; drawScreen(); saveLocal(); };
 $("lblShow").onchange=e=>{ labelOpts.show=e.target.checked; drawScreen(); saveLocal(); };
@@ -846,7 +893,11 @@ function setRot(deg, resetPan){
 $("rotL").onclick=()=>{ if(selCell<0)return; setRot(cells[selCell].rot-90, true); };
 $("rotR").onclick=()=>{ if(selCell<0)return; setRot(cells[selCell].rot+90, true); };
 $("rotF").oninput=e=>{ setRot(+e.target.value, false); };
-$("clearImg").onclick=()=>{ if(selCell<0)return; cells[selCell].imgId=null; sync(); drawScreen(); updateReadout(); saveLocal(); };
+$("clearImg").onclick=()=>{
+  if(selCell<0) return;
+  if(cells[selCell].arrows.length&&!confirm("Clear this panel's image and arrows? The panel label and frame settings will be kept. Undo can restore the image and arrows.")) return;
+  if(clearPanelImage(selCell)){ sync(); drawScreen(); updateReadout(); saveLocal(); }
+};
 $("resetT").onclick=()=>{ if(selCell<0)return; Object.assign(cells[selCell],{zoom:1,ox:0,oy:0,rot:0}); $("zoom").value=100; $("rotF").value=0; $("rotV").textContent="0°"; drawScreen(); updateReadout(); saveLocal(); };
 $("page2").onchange=e=>{ if(selCell<0)return; cells[selCell].page2=e.target.checked; drawScreen(); updateReadout(); saveLocal(); };
 $("lblText").oninput=e=>{ if(selCell<0)return; cells[selCell].labelText=e.target.value; drawScreen(); saveLocal(); };
@@ -857,18 +908,25 @@ $("addArrow").onclick=()=>{ if(selCell<0||cells[selCell].arrows.length>=200)retu
 $("delArrow").onclick=()=>{ if(selCell<0||selArrow<0)return; drag=null; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; sync(); drawScreen(); saveLocal(); };
 $("arrowW").oninput=e=>{ if(selCell<0||selArrow<0)return; cells[selCell].arrows[selArrow].width=+e.target.value; drawScreen(); syncPhysicalControls(); saveLocal(); };
 document.querySelectorAll("#arrowColors .swatch").forEach(s=>s.onclick=()=>{
-  document.querySelectorAll("#arrowColors .swatch").forEach(x=>x.classList.remove("sel")); s.classList.add("sel");
   arrowColor=s.dataset.c; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); }
+  syncArrowColor();
 });
-$("arrowCustom").oninput=e=>{ arrowColor=e.target.value; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); } };
+$("arrowCustom").oninput=e=>{ arrowColor=e.target.value; if(selCell>=0&&selArrow>=0){ cells[selCell].arrows[selArrow].color=arrowColor; drawScreen(); saveLocal(); } syncArrowColor(); };
 $("arrowsShow").onchange=e=>{ arrowsShow=e.target.checked; drawScreen(); saveLocal(); };
-function onOutChange(){ render(); sync(); }
+function onOutChange(e){
+  const input=e?.target, editingSize=input===$("wmm")||input===$("hmm");
+  if(editingSize) restoreGeometryInputBaseline(input); else finishGeometryInputEdit();
+  const width=+$("wmm").value, height=$("hmm").value;
+  const valid=Number.isFinite(width)&&width>=20&&width<=500&&(height===""||(Number.isFinite(+height)&&+height>=20&&+height<=1000));
+  if(valid){ render(); sync(); }
+  else { resizeStage(); drawScreen(); updateReadout(); syncPhysicalControls(); saveLocal(); }
+}
 $("previewZoom").onchange=()=>{ resizeStage(); drawScreen(); };
 $("wmm").oninput=onOutChange;
 $("hmm").oninput=onOutChange;
 $("autoHeight").onclick=()=>{ $("hmm").value=""; onOutChange(); };
 $("dpi").oninput=onOutChange;
-bindPhysicalField("gutterMm",0,100,v=>{ gutter=v; $("gutter").value=v; });
+bindPhysicalField("gutterMm",0,100,v=>{ restoreGeometryInputBaseline($("gutterMm")); gutter=v; $("gutter").value=v; });
 bindPhysicalField("lblPt",1,1500,v=>{ labelOpts.size=v; $("lblSize").value=v; },true);
 bindPhysicalField("frWidthMm",0,100,v=>{ frameOpts.width=v; $("frWidth").value=v; });
 bindPhysicalField("frRadiusMm",0,100,v=>{ frameOpts.radius=v; $("frRadius").value=v; });
@@ -876,6 +934,16 @@ bindPhysicalField("arrowWidthMm",.1,100,v=>{ if(selCell>=0&&selArrow>=0){ cells[
 document.querySelectorAll("[data-dpi]").forEach(b=>b.onclick=()=>{ $("dpi").value=b.dataset.dpi; onOutChange(); });
 document.querySelectorAll("[data-mm]").forEach(b=>b.onclick=()=>{ $("wmm").value=b.dataset.mm; onOutChange(); });
 $("jpreset").onchange=e=>{ const v=e.target.value; if(!v){ return; } const [w,d]=v.split(","); $("wmm").value=w; $("dpi").value=d; onOutChange(); e.target.value=""; };
+for(const id of ["wmm","hmm","gutterMm","gutter"]){
+  const input=$(id);
+  input.addEventListener("focus",()=>beginGeometryInputEdit(input));
+  input.addEventListener("blur",finishGeometryInputEdit);
+  input.addEventListener("change",finishGeometryInputEdit);
+  input.addEventListener("keydown",e=>{ if(e.key==="Enter") finishGeometryInputEdit(); });
+}
+document.addEventListener("pointerdown",e=>{
+  if(geometryInputEdit&&e.target!==geometryInputEdit.input) finishGeometryInputEdit();
+},true);
 
 /* ---------- export (PNG with correct DPI via pHYs) ---------- */
 function renderOffscreen(includePage2){
@@ -948,6 +1016,42 @@ function withPhys(png,dpi){
 
 /* ---------- undo / redo (shared decoded images, bounded session history) ---------- */
 let editorHistory=[], historyIndex=-1, restoringHistory=false;
+let historyEdit=null, historyEventEdit=null;
+function endHistoryEdit(){ historyEdit=null; historyEventEdit=null; }
+function beginHistoryEdit(target,kind="input"){
+  const now=performance.now();
+  if(!historyEdit||historyEdit.target!==target||historyEdit.kind!==kind||
+     (kind!=="wheel"&&(historyEdit.cell!==selCell||historyEdit.arrow!==selArrow))||
+     (kind==="wheel"&&now-historyEdit.time>400)){
+    historyEdit={target,kind,cell:selCell,arrow:selArrow,entry:null};
+  }
+  historyEdit.time=now; historyEventEdit=historyEdit;
+}
+// Keep live preview/autosave on every input, but one editing gesture occupies
+// only one undo step. Limit grouping to the event that actually changed it.
+for(const type of ["input","change"]){
+  document.addEventListener(type,e=>{
+    historyEventEdit=null;
+    if(e.target.matches('input[type="text"],input[type="number"],input[type="range"],input[type="color"]')) beginHistoryEdit(e.target);
+    else endHistoryEdit();
+  },true);
+  document.addEventListener(type,()=>{
+    historyEventEdit=null;
+    if(type==="change") endHistoryEdit();
+  });
+}
+document.addEventListener("pointerdown",endHistoryEdit,true);
+document.addEventListener("focusout",endHistoryEdit);
+document.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key==="Escape") endHistoryEdit(); });
+document.addEventListener("wheel",e=>{
+  historyEventEdit=null;
+  if(e.target===stage&&e.altKey&&!e.ctrlKey&&!e.metaKey&&e.deltaY!==0){
+    const ci=cellAt(canvasToLogical(e));
+    if(ci>=0) beginHistoryEdit("wheel:"+ci,"wheel");
+  }
+}, {capture:true,passive:true});
+document.addEventListener("wheel",()=>{ historyEventEdit=null; },{passive:true});
+window.addEventListener("blur",endHistoryEdit);
 const historyImageKeys=new WeakMap(); let nextHistoryImageKey=0;
 function editorSnapshot(){
   return {layoutName,customDef:structuredClone(customDef),gutter,bgColor,
@@ -967,6 +1071,7 @@ function updateHistoryButtons(){
   $("redo").disabled=historyIndex>=editorHistory.length-1;
 }
 function resetHistory(){
+  endHistoryEdit();
   const state=editorSnapshot(); editorHistory=[{state,signature:historySignature(state)}]; historyIndex=0;
   updateHistoryButtons();
 }
@@ -974,8 +1079,18 @@ function recordHistory(){
   if(initializing||restoringHistory) return;
   const state=editorSnapshot(), signature=historySignature(state);
   if(editorHistory[historyIndex]?.signature===signature) return;
+  const group=historyEventEdit, entry={state,signature};
+  if(group?.entry===editorHistory[historyIndex]&&historyIndex>0){
+    if(editorHistory[historyIndex-1].signature===signature){
+      editorHistory.pop(); historyIndex--; group.entry=null;
+    }else{
+      editorHistory[historyIndex]=entry; group.entry=entry;
+    }
+    updateHistoryButtons(); return;
+  }
   editorHistory.splice(historyIndex+1);
-  editorHistory.push({state,signature});
+  editorHistory.push(entry);
+  if(group) group.entry=entry;
   if(editorHistory.length>51) editorHistory.shift();
   historyIndex=editorHistory.length-1; updateHistoryButtons();
 }
@@ -987,6 +1102,7 @@ function syncProjectControls(){
   $("arrowsShow").checked=arrowsShow; $("grid").checked=gridShow;
 }
 function moveHistory(delta){
+  endHistoryEdit();
   const next=historyIndex+delta;
   if(ioBusy||next<0||next>=editorHistory.length) return;
   // Any pending pan must not write into the restored state.
@@ -1012,7 +1128,7 @@ window.addEventListener("keydown",e=>{
 /* ---------- project save/load (self-contained JSON) ---------- */
 function projectJSON(){
   return JSON.stringify({
-    v:4, appVersion:"0.5.0", layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, arrowsShow, gridShow, wmm:+$("wmm").value, hmm:$("hmm").value===""?null:+$("hmm").value, dpi:+$("dpi").value,
+    v:4, appVersion:"0.5.1", layoutName, customDef, gutter, bgColor, labelOpts, frameOpts, arrowsShow, gridShow, wmm:+$("wmm").value, hmm:$("hmm").value===""?null:+$("hmm").value, dpi:+$("dpi").value,
     images: images.map(im=>({id:im.id,name:im.name,src:im.img.src})),
     cells: cells.map(c=>({imgId:c.imgId,fit:c.fit,zoom:c.zoom,ox:c.ox,oy:c.oy,rot:c.rot,page2:c.page2,labelText:c.labelText,bd:c.bd,bdColor:c.bdColor,arrows:c.arrows}))
   });
@@ -1393,6 +1509,7 @@ window.addEventListener("drop",e=>{
 // Observe the workspace itself: toolbar wrapping can resize it without a window resize.
 new ResizeObserver(()=>{ if(geom){ resizeStage(); drawScreen(); } }).observe($("main"));
 window.addEventListener("keydown",e=>{
+  if(ioBusy||recoveryBusy||initializing) return;
   const target=document.activeElement;
   if((e.key==="Delete"||e.key==="Backspace")&&selCell>=0&&selArrow>=0&&!target.matches("input,textarea,select,[contenteditable]")){
     e.preventDefault(); drag=null; cells[selCell].arrows.splice(selArrow,1); selArrow=-1; sync(); drawScreen(); saveLocal();
